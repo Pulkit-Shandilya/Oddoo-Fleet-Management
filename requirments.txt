@@ -1,0 +1,17 @@
+# Flask Backend Dependencies
+Flask==3.0.0
+flask-sqlalchemy==3.1.1
+flask-cors==4.0.0
+flask-jwt-extended==4.7.1
+flask-migrate==4.1.0
+flask-bcrypt==1.0.1
+python-dotenv==1.2.1
+marshmallow==4.2.2
+email-validator==2.3.0
+requests==2.32.5
+
+# Database
+# Uncomment the database driver you need:
+# psycopg2-binary==2.9.9  # For PostgreSQL
+# PyMySQL==1.1.0  # For MySQL
+# Or use SQLite (included in Python)

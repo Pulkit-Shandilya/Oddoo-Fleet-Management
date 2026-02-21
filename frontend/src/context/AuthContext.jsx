@@ -1,6 +1,6 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import { createContext, useState, useContext, useEffect } from 'react';
 import { authService } from '../services/api';
-import {jwtDecode} from 'jwt-decode';
+import { jwtDecode } from 'jwt-decode';
 
 const AuthContext = createContext(null);
 
@@ -30,7 +30,7 @@ export const AuthProvider = ({ children }) => {
       }
       setLoading(false);
     };
-    
+
     initAuth();
   }, []);
 
@@ -61,7 +61,7 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (userData) => {
     try {
-      const response = await authService.register(userData);
+      await authService.register(userData);
       return { success: true, message: 'Registration successful! Please login.' };
     } catch (error) {
       return {

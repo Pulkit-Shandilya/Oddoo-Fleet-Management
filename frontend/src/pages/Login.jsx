@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import './Login.css';
@@ -12,6 +12,7 @@ const Login = () => {
   });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { login, register } = useAuth();
   const navigate = useNavigate();
 
@@ -26,31 +27,36 @@ const Login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setError('');
     setSuccess('');
+    setIsSubmitting(true);
 
-    if (isLogin) {
-      const result = await login(formData.phone, formData.password);
-      if (result.success) {
-        navigate('/dashboard');
-      } else {
-        setError(result.message);
-      }
-    } else {
-      const registerResult = await register(formData);
-      if (registerResult.success) {
-        setSuccess('Registration successful! Logging you in...');
-        // Auto-login after successful registration
-        const loginResult = await login(formData.phone, formData.password);
-        if (loginResult.success) {
+    try {
+      if (isLogin) {
+        const result = await login(formData.phone, formData.password);
+        if (result.success) {
           navigate('/dashboard');
         } else {
-          setError('Registration successful but auto-login failed. Please login manually.');
-          setTimeout(() => setIsLogin(true), 2000);
+          setError(result.message);
         }
       } else {
-        setError(registerResult.message);
+        const registerResult = await register(formData);
+        if (registerResult.success) {
+          setSuccess('Registration successful! Logging you in...');
+          const loginResult = await login(formData.phone, formData.password);
+          if (loginResult.success) {
+            navigate('/dashboard');
+          } else {
+            setError('Registration successful but auto-login failed. Please login manually.');
+            setTimeout(() => setIsLogin(true), 2000);
+          }
+        } else {
+          setError(registerResult.message);
+        }
       }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -100,8 +106,8 @@ const Login = () => {
             />
           </div>
 
-          <button type="submit" className="btn-primary">
-            {isLogin ? 'Login' : 'Register'}
+          <button type="submit" className="btn-primary" disabled={isSubmitting}>
+            {isSubmitting ? 'Please wait…' : isLogin ? 'Login' : 'Register'}
           </button>
         </form>
 

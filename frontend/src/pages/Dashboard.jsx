@@ -31,6 +31,9 @@ export default function Dashboard() {
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [activeTab, setActiveTab] = useState('Dashboard');
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [sortBy, setSortBy] = useState('');
+  const [sortDir, setSortDir] = useState('asc');
   const [selectedRows, setSelectedRows] = useState([]);
   const [showProfile, setShowProfile] = useState(false);
   const [modalOpen, setModalOpen] = useState(null); // 'vehicle' | 'driver' | 'trip' | 'maintenance' | 'expense' | null
@@ -50,6 +53,53 @@ export default function Dashboard() {
 
   const openModal = (type) => { setModalError(''); setModalOpen(type); };
   const closeModal = () => { setModalOpen(null); setModalError(''); setModalLoading(false); };
+
+  // CSV Export helper
+  const exportToCSV = (data, headers, filename) => {
+    if (!data || data.length === 0) return;
+    const csvRows = [headers.join(',')];
+    data.forEach(row => {
+      const values = headers.map(h => {
+        const val = row[h] ?? '';
+        // Escape commas and quotes
+        const str = String(val).replace(/"/g, '""');
+        return str.includes(',') || str.includes('"') || str.includes('\n') ? `"${str}"` : str;
+      });
+      csvRows.push(values.join(','));
+    });
+    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${filename}_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const isAdmin = user?.role === 'admin' || user?.role === 'manager';
+
+  const handleExport = () => {
+    if (!isAdmin) return;
+    let data, headers, filename;
+    if (activeTab === 'Vehicle Registry') {
+      data = filteredVehicles; headers = ['vehicle_number', 'make', 'model', 'license_plate', 'status']; filename = 'vehicles';
+    } else if (activeTab === 'Maintenance') {
+      data = filteredMaintenance; headers = ['vehicle_number', 'type', 'description', 'date', 'cost']; filename = 'maintenance';
+    } else if (activeTab === 'User Management') {
+      data = filteredUsers.map(u => ({ ...u, created_at: new Date(u.created_at).toLocaleDateString() })); headers = ['phone', 'username', 'email', 'role', 'created_at']; filename = 'users';
+    } else if (activeTab === 'Trip Dispatcher') {
+      data = []; headers = ['vehicle_number', 'driver_phone', 'origin', 'destination', 'date', 'distance']; filename = 'trips';
+    } else if (activeTab === 'Trip & Expense') {
+      data = []; headers = ['vehicle_number', 'category', 'amount', 'date', 'notes']; filename = 'expenses';
+    } else {
+      data = filteredDrivers; headers = ['name', 'email', 'license_number', 'status']; filename = 'drivers';
+    }
+    if (!data || data.length === 0) {
+      alert('No data to export');
+      return;
+    }
+    exportToCSV(data, headers, filename);
+  };
 
   const handleVehicleSubmit = async (e) => {
     e.preventDefault();
@@ -186,17 +236,58 @@ export default function Dashboard() {
     return { totalD: total, availD: avail, assignedD: assigned, inactiveD: total - avail - assigned };
   }, [drivers]);
 
-  const filteredVehicles = useMemo(() =>
-    vehicles.filter(v => [v.vehicle_number, v.make, v.model, v.license_plate, v.status].join(' ').toLowerCase().includes(searchTerm.toLowerCase())),
-    [vehicles, searchTerm]);
+  // Generic sort helper
+  const sortData = useCallback((data, key, dir) => {
+    if (!key) return data;
+    return [...data].sort((a, b) => {
+      const aVal = (a[key] ?? '').toString().toLowerCase();
+      const bVal = (b[key] ?? '').toString().toLowerCase();
+      if (aVal < bVal) return dir === 'asc' ? -1 : 1;
+      if (aVal > bVal) return dir === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, []);
 
-  const filteredDrivers = useMemo(() =>
-    drivers.filter(d => [d.name, d.email, d.license_number, d.status].join(' ').toLowerCase().includes(searchTerm.toLowerCase())),
-    [drivers, searchTerm]);
+  const handleSort = (key) => {
+    if (sortBy === key) {
+      setSortDir(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(key);
+      setSortDir('asc');
+    }
+  };
 
-  const filteredUsers = useMemo(() =>
-    users.filter(u => [u.username, u.phone, u.email, u.role].join(' ').toLowerCase().includes(searchTerm.toLowerCase())),
-    [users, searchTerm]);
+  // Reset filters when switching tabs
+  useEffect(() => {
+    setStatusFilter('all');
+    setSortBy('');
+    setSortDir('asc');
+    setSearchTerm('');
+  }, [activeTab]);
+
+  const filteredVehicles = useMemo(() => {
+    let data = vehicles.filter(v => [v.vehicle_number, v.make, v.model, v.license_plate, v.status].join(' ').toLowerCase().includes(searchTerm.toLowerCase()));
+    if (statusFilter !== 'all') data = data.filter(v => v.status === statusFilter);
+    return sortData(data, sortBy, sortDir);
+  }, [vehicles, searchTerm, statusFilter, sortBy, sortDir, sortData]);
+
+  const filteredDrivers = useMemo(() => {
+    let data = drivers.filter(d => [d.name, d.email, d.license_number, d.status].join(' ').toLowerCase().includes(searchTerm.toLowerCase()));
+    if (statusFilter !== 'all') data = data.filter(d => d.status === statusFilter);
+    return sortData(data, sortBy, sortDir);
+  }, [drivers, searchTerm, statusFilter, sortBy, sortDir, sortData]);
+
+  const filteredUsers = useMemo(() => {
+    let data = users.filter(u => [u.username, u.phone, u.email, u.role].join(' ').toLowerCase().includes(searchTerm.toLowerCase()));
+    if (statusFilter !== 'all') data = data.filter(u => u.role === statusFilter);
+    return sortData(data, sortBy, sortDir);
+  }, [users, searchTerm, statusFilter, sortBy, sortDir, sortData]);
+
+  const filteredMaintenance = useMemo(() => {
+    let data = maintenanceRecords.filter(r => [r.vehicle_number, r.type, r.description, r.date].join(' ').toLowerCase().includes(searchTerm.toLowerCase()));
+    if (statusFilter !== 'all') data = data.filter(r => r.type === statusFilter);
+    return sortData(data, sortBy, sortDir);
+  }, [maintenanceRecords, searchTerm, statusFilter, sortBy, sortDir, sortData]);
 
   const toggleRow = useCallback(pk => {
     setSelectedRows(prev => prev.includes(pk) ? prev.filter(r => r !== pk) : [...prev, pk]);
@@ -438,6 +529,29 @@ export default function Dashboard() {
       cursor: 'pointer',
       marginRight: '6px',
     },
+    filterSelect: {
+      border: '1px solid #ddd',
+      borderRadius: '6px',
+      padding: '6px 10px',
+      fontSize: '12px',
+      background: '#fff',
+      cursor: 'pointer',
+      outline: 'none',
+      color: '#333',
+    },
+    sortableTh: {
+      padding: '10px 14px',
+      textAlign: 'left',
+      fontWeight: 600,
+      color: '#888',
+      fontSize: '11px',
+      textTransform: 'uppercase',
+      letterSpacing: '0.4px',
+      borderBottom: '1px solid #eee',
+      background: '#fafafa',
+      cursor: 'pointer',
+      userSelect: 'none',
+    },
     pageTitle: {
       fontSize: '20px',
       fontWeight: 700,
@@ -671,9 +785,18 @@ export default function Dashboard() {
                 )}
               </div>
               <div style={styles.filterRow}>
-                <div>
-                  <span style={styles.chip}>Columns ▾</span>
-                  <span style={styles.chip}>Status ▾</span>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <select
+                    style={styles.filterSelect}
+                    value={statusFilter}
+                    onChange={e => setStatusFilter(e.target.value)}
+                  >
+                    <option value="all">All Status</option>
+                    {isVehicles && <><option value="active">Active</option><option value="maintenance">Maintenance</option><option value="inactive">Inactive</option></>}
+                    {activeTab === 'Drivers' && <><option value="available">Available</option><option value="assigned">Assigned</option><option value="inactive">Inactive</option></>}
+                    {isUsers && <><option value="admin">Admin</option><option value="user">User</option></>}
+                    {activeTab === 'Maintenance' && <><option value="oil_change">Oil Change</option><option value="tire_rotation">Tire Rotation</option><option value="brake_service">Brake Service</option><option value="engine_repair">Engine Repair</option><option value="general">General</option></>}
+                  </select>
                 </div>
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                   <input
@@ -683,7 +806,7 @@ export default function Dashboard() {
                     value={searchTerm}
                     onChange={e => setSearchTerm(e.target.value)}
                   />
-                  <button style={{ ...styles.chip, margin: 0 }}>↗ Export</button>
+                  {isAdmin && <button style={{ ...styles.chip, margin: 0 }} onClick={handleExport}>↗ Export</button>}
                 </div>
               </div>
               <div style={styles.tableCard}>
@@ -692,11 +815,11 @@ export default function Dashboard() {
                     <thead>
                       <tr>
                         <th style={styles.th}><input type="checkbox" /></th>
-                        <th style={styles.th}>Vehicle #</th>
-                        <th style={styles.th}>Make</th>
-                        <th style={styles.th}>Model</th>
-                        <th style={styles.th}>Plate</th>
-                        <th style={styles.th}>Status</th>
+                        <th style={styles.sortableTh} onClick={() => handleSort('vehicle_number')}>Vehicle # {sortBy === 'vehicle_number' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+                        <th style={styles.sortableTh} onClick={() => handleSort('make')}>Make {sortBy === 'make' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+                        <th style={styles.sortableTh} onClick={() => handleSort('model')}>Model {sortBy === 'model' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+                        <th style={styles.sortableTh} onClick={() => handleSort('license_plate')}>Plate {sortBy === 'license_plate' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+                        <th style={styles.sortableTh} onClick={() => handleSort('status')}>Status {sortBy === 'status' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -722,11 +845,11 @@ export default function Dashboard() {
                     <table style={styles.table}>
                       <thead>
                         <tr>
-                          <th style={styles.th}>Phone</th>
-                          <th style={styles.th}>Username</th>
-                          <th style={styles.th}>Email</th>
-                          <th style={styles.th}>Role</th>
-                          <th style={styles.th}>Joined</th>
+                          <th style={styles.sortableTh} onClick={() => handleSort('phone')}>Phone {sortBy === 'phone' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+                          <th style={styles.sortableTh} onClick={() => handleSort('username')}>Username {sortBy === 'username' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+                          <th style={styles.sortableTh} onClick={() => handleSort('email')}>Email {sortBy === 'email' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+                          <th style={styles.sortableTh} onClick={() => handleSort('role')}>Role {sortBy === 'role' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+                          <th style={styles.sortableTh} onClick={() => handleSort('created_at')}>Joined {sortBy === 'created_at' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
                           <th style={styles.th}>Actions</th>
                         </tr>
                       </thead>
@@ -768,24 +891,28 @@ export default function Dashboard() {
                   )
                 )}
                 {!isVehicles && !isUsers && activeTab === 'Maintenance' && (
-                  maintenanceRecords.length === 0 ? (
+                  filteredMaintenance.length === 0 && maintenanceRecords.length === 0 ? (
                     <div style={{ padding: '40px', textAlign: 'center', color: '#aaa', fontSize: '14px' }}>
                       No maintenance records yet. Click "+ Add Record" to add one.
+                    </div>
+                  ) : filteredMaintenance.length === 0 ? (
+                    <div style={{ padding: '40px', textAlign: 'center', color: '#aaa', fontSize: '14px' }}>
+                      No records match your filters.
                     </div>
                   ) : (
                     <table style={styles.table}>
                       <thead>
                         <tr>
-                          <th style={styles.th}>Vehicle #</th>
-                          <th style={styles.th}>Type</th>
+                          <th style={styles.sortableTh} onClick={() => handleSort('vehicle_number')}>Vehicle # {sortBy === 'vehicle_number' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+                          <th style={styles.sortableTh} onClick={() => handleSort('type')}>Type {sortBy === 'type' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
                           <th style={styles.th}>Description</th>
-                          <th style={styles.th}>Date</th>
-                          <th style={styles.th}>Cost ($)</th>
+                          <th style={styles.sortableTh} onClick={() => handleSort('date')}>Date {sortBy === 'date' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+                          <th style={styles.sortableTh} onClick={() => handleSort('cost')}>Cost ($) {sortBy === 'cost' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
                           <th style={styles.th}>Action</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {maintenanceRecords.map(r => (
+                        {filteredMaintenance.map(r => (
                           <tr key={r.id}>
                             <td style={styles.td}>{r.vehicle_number}</td>
                             <td style={styles.td}>{r.type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</td>

@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 const NAV_ITEMS = ['Dashboard', 'Vehicle Registry', 'Trip Dispatcher', 'Maintenance', 'Trip & Expense', 'Performance', 'Analytics'];
 
@@ -18,11 +20,14 @@ const mockDrivers = [
 ];
 
 export default function Dashboard() {
+  const { logout, user } = useAuth();
+  const navigate = useNavigate();
   const [vehicles] = useState(mockVehicles);
   const [drivers] = useState(mockDrivers);
   const [activeTab, setActiveTab] = useState('Dashboard');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRows, setSelectedRows] = useState([]);
+  const [showProfile, setShowProfile] = useState(false);
 
   const { totalV, activeV, maintV, inactiveV } = useMemo(() => {
     const total = vehicles.length;
@@ -132,6 +137,20 @@ export default function Dashboard() {
       width: '100%',
       transition: 'all 0.15s ease',
     }),
+    logoutBtn: {
+      marginTop: '20px',
+      padding: '12px 16px',
+      borderRadius: '10px',
+      fontSize: '14px',
+      fontWeight: 600,
+      cursor: 'pointer',
+      background: '#dc2626',
+      color: '#fff',
+      border: 'none',
+      textAlign: 'center',
+      width: '100%',
+      transition: 'all 0.15s ease',
+    },
     main: {
       flex: 1,
       background: 'rgba(235,240,220,0.55)',
@@ -278,6 +297,89 @@ export default function Dashboard() {
       color: '#111',
       margin: 0,
     },
+    profilePopup: {
+      position: 'absolute',
+      top: '60px',
+      right: '20px',
+      background: 'rgba(255,255,255,0.95)',
+      borderRadius: '16px',
+      padding: '24px',
+      minWidth: '280px',
+      boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+      border: '1px solid rgba(255,255,255,0.9)',
+      backdropFilter: 'blur(12px)',
+      zIndex: 1000,
+    },
+    profileHeader: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '12px',
+      marginBottom: '20px',
+      paddingBottom: '16px',
+      borderBottom: '1px solid rgba(0,0,0,0.08)',
+    },
+    profileAvatar: {
+      width: '56px',
+      height: '56px',
+      borderRadius: '50%',
+      background: 'linear-gradient(135deg, #111 0%, #333 100%)',
+      color: '#fff',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontSize: '24px',
+      fontWeight: 700,
+    },
+    profileInfo: {
+      flex: 1,
+    },
+    profileName: {
+      fontSize: '16px',
+      fontWeight: 700,
+      color: '#111',
+      marginBottom: '4px',
+    },
+    profileRole: {
+      fontSize: '12px',
+      color: '#888',
+      textTransform: 'capitalize',
+    },
+    profileDetail: {
+      marginBottom: '14px',
+    },
+    profileLabel: {
+      fontSize: '11px',
+      fontWeight: 600,
+      color: '#888',
+      textTransform: 'uppercase',
+      letterSpacing: '0.5px',
+      marginBottom: '4px',
+    },
+    profileValue: {
+      fontSize: '14px',
+      color: '#333',
+      fontWeight: 500,
+    },
+    closeBtn: {
+      position: 'absolute',
+      top: '12px',
+      right: '12px',
+      background: 'transparent',
+      border: 'none',
+      cursor: 'pointer',
+      padding: '4px',
+      color: '#888',
+      fontSize: '20px',
+      lineHeight: 1,
+    },
+    overlay: {
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      zIndex: 999,
+    },
   };
 
   const isDashboard = activeTab === 'Dashboard';
@@ -286,10 +388,54 @@ export default function Dashboard() {
 
   return (
     <div style={styles.root}>
+      {/* Profile Popup Overlay */}
+      {showProfile && <div style={styles.overlay} onClick={() => setShowProfile(false)} />}
+      
+      {/* Profile Popup */}
+      {showProfile && (
+        <div style={styles.profilePopup}>
+          <button style={styles.closeBtn} onClick={() => setShowProfile(false)}>×</button>
+          <div style={styles.profileHeader}>
+            <div style={styles.profileAvatar}>
+              {user?.username?.charAt(0)?.toUpperCase() || user?.phone?.charAt(0) || 'U'}
+            </div>
+            <div style={styles.profileInfo}>
+              <div style={styles.profileName}>
+                {user?.username || 'User'}
+              </div>
+              <div style={styles.profileRole}>{user?.role || 'user'}</div>
+            </div>
+          </div>
+          <div style={styles.profileDetail}>
+            <div style={styles.profileLabel}>Phone Number</div>
+            <div style={styles.profileValue}>{user?.phone || 'N/A'}</div>
+          </div>
+          <div style={styles.profileDetail}>
+            <div style={styles.profileLabel}>Email</div>
+            <div style={styles.profileValue}>{user?.email || 'N/A'}</div>
+          </div>
+          <div style={styles.profileDetail}>
+            <div style={styles.profileLabel}>Member Since</div>
+            <div style={styles.profileValue}>
+              {user?.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}
+            </div>
+          </div>
+          <button
+            style={styles.logoutBtn}
+            onClick={() => {
+              logout();
+              navigate('/login');
+            }}
+          >
+            Logout
+          </button>
+        </div>
+      )}
+
       {/* Top Bar */}
       <header style={styles.topbar}>
         <div style={styles.logo}>FleeFo</div>
-        <button style={styles.accountBtn}>
+        <button style={styles.accountBtn} onClick={() => setShowProfile(!showProfile)}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
           Account
         </button>

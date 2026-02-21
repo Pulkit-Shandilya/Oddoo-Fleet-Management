@@ -4,8 +4,8 @@ from app import db, bcrypt
 class User(db.Model):
     __tablename__ = 'users'
     
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
+    phone = db.Column(db.String(20), primary_key=True, nullable=False)
+    username = db.Column(db.String(80), nullable=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(128), nullable=False)
     role = db.Column(db.String(20), default='user')  # admin, manager, user
@@ -19,7 +19,8 @@ class User(db.Model):
     
     def to_dict(self):
         return {
-            'id': self.id,
+            'id': self.phone,
+            'phone': self.phone,
             'username': self.username,
             'email': self.email,
             'role': self.role,

@@ -1,6 +1,6 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import { createContext, useState, useContext, useEffect } from 'react';
 import { authService } from '../services/api';
-import {jwtDecode} from 'jwt-decode';
+import { jwtDecode } from 'jwt-decode';
 
 const AuthContext = createContext(null);
 
@@ -10,22 +10,28 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     // Check if user is logged in on mount
-    const token = localStorage.getItem('access_token');
-    if (token) {
-      try {
-        const decoded = jwtDecode(token);
-        // Check if token is expired
-        if (decoded.exp * 1000 > Date.now()) {
-          fetchCurrentUser();
-        } else {
+    const initAuth = async () => {
+      const token = localStorage.getItem('access_token');
+      if (token) {
+        try {
+          const decoded = jwtDecode(token);
+          // Check if token is expired
+          if (decoded.exp * 1000 > Date.now()) {
+            await fetchCurrentUser();
+          } else {
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+          }
+        } catch (error) {
+          console.error('Invalid token', error);
           localStorage.removeItem('access_token');
           localStorage.removeItem('refresh_token');
         }
-      } catch (error) {
-        console.error('Invalid token', error);
       }
-    }
-    setLoading(false);
+      setLoading(false);
+    };
+
+    initAuth();
   }, []);
 
   const fetchCurrentUser = async () => {
@@ -38,9 +44,9 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const login = async (username, password) => {
+  const login = async (phone, password) => {
     try {
-      const response = await authService.login({ username, password });
+      const response = await authService.login({ phone, password });
       localStorage.setItem('access_token', response.data.access_token);
       localStorage.setItem('refresh_token', response.data.refresh_token);
       setUser(response.data.user);
@@ -55,7 +61,7 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (userData) => {
     try {
-      const response = await authService.register(userData);
+      await authService.register(userData);
       return { success: true, message: 'Registration successful! Please login.' };
     } catch (error) {
       return {
@@ -69,6 +75,14 @@ export const AuthProvider = ({ children }) => {
     authService.logout();
     setUser(null);
   };
+
+  // Expose logout to window for testing/debugging
+  useEffect(() => {
+    window.logout = logout;
+    return () => {
+      delete window.logout;
+    };
+  }, []);
 
   const value = {
     user,

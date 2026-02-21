@@ -12,7 +12,7 @@ class Vehicle(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
-    driver_license = db.Column(db.String(50), db.ForeignKey('drivers.license_number'), nullable=True)
+    driver_phone = db.Column(db.String(20), db.ForeignKey('drivers.phone'), nullable=True)
     
     def to_dict(self):
         return {
@@ -21,7 +21,7 @@ class Vehicle(db.Model):
             'holding_capacity': self.holding_capacity,
             'mileage': self.mileage,
             'status': self.status,
-            'driver_license': self.driver_license,
+            'driver_phone': self.driver_phone,
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat()
         }

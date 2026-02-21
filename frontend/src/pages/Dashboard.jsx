@@ -1,0 +1,798 @@
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { vehicleService, driverService } from '../services/api';
+import './Dashboard.css';
+
+const NAV_ITEMS = ['Dashboard', 'Vehicle Registry', 'Trip Dispatcher', 'Maintenance', 'Trip & Expense', 'Performance', 'Analytics'];
+
+const mockVehicles = [
+  { id: 1, vehicle_number: 'V001', make: 'Ford', model: 'Transit', license_plate: 'ABC123', status: 'active' },
+  { id: 2, vehicle_number: 'V002', make: 'Mercedes', model: 'Sprinter', license_plate: 'DEF456', status: 'maintenance' },
+  { id: 3, vehicle_number: 'V003', make: 'Toyota', model: 'HiAce', license_plate: 'GHI789', status: 'inactive' },
+  { id: 4, vehicle_number: 'V004', make: 'Volkswagen', model: 'Crafter', license_plate: 'JKL012', status: 'active' },
+  { id: 5, vehicle_number: 'V005', make: 'Iveco', model: 'Daily', license_plate: 'MNO345', status: 'active' },
+];
+
+const mockDrivers = [
+  { id: 1, name: 'James Wilson', email: 'james@fleet.com', license_number: 'DL001', status: 'available' },
+  { id: 2, name: 'Sarah Chen', email: 'sarah@fleet.com', license_number: 'DL002', status: 'assigned' },
+  { id: 3, name: 'Mike Torres', email: 'mike@fleet.com', license_number: 'DL003', status: 'inactive' },
+  { id: 4, name: 'Priya Patel', email: 'priya@fleet.com', license_number: 'DL004', status: 'available' },
+];
+
+export default function Dashboard() {
+  const { logout, user } = useAuth();
+  const navigate = useNavigate();
+  const [vehicles] = useState(mockVehicles);
+  const [drivers] = useState(mockDrivers);
+  const [activeTab, setActiveTab] = useState('Dashboard');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedRows, setSelectedRows] = useState([]);
+  const [showProfile, setShowProfile] = useState(false);
+  const [modalOpen, setModalOpen] = useState(null); // 'vehicle' | 'driver' | 'trip' | 'maintenance' | 'expense' | null
+  const [modalLoading, setModalLoading] = useState(false);
+  const [modalError, setModalError] = useState('');
+
+  // Form states
+  const [vehicleForm, setVehicleForm] = useState({ vehicle_number: '', holding_capacity: '', mileage: '', status: 'active', driver_phone: '' });
+  const [driverForm, setDriverForm] = useState({ name: '', phone: '', email: '', license_number: '', license_expiry: '', status: 'available' });
+  const [tripForm, setTripForm] = useState({ vehicle_number: '', driver_phone: '', origin: '', destination: '', date: '', distance: '' });
+  const [maintenanceForm, setMaintenanceForm] = useState({ vehicle_number: '', type: '', description: '', date: '', cost: '' });
+  const [expenseForm, setExpenseForm] = useState({ vehicle_number: '', category: '', amount: '', date: '', notes: '' });
+
+  const openModal = (type) => { setModalError(''); setModalOpen(type); };
+  const closeModal = () => { setModalOpen(null); setModalError(''); setModalLoading(false); };
+
+  const handleVehicleSubmit = async (e) => {
+    e.preventDefault();
+    setModalLoading(true); setModalError('');
+    try {
+      await vehicleService.create({
+        vehicle_number: vehicleForm.vehicle_number,
+        holding_capacity: vehicleForm.holding_capacity ? parseInt(vehicleForm.holding_capacity) : null,
+        mileage: vehicleForm.mileage ? parseInt(vehicleForm.mileage) : 0,
+        status: vehicleForm.status,
+        driver_phone: vehicleForm.driver_phone || null,
+      });
+      setVehicleForm({ vehicle_number: '', holding_capacity: '', mileage: '', status: 'active', driver_phone: '' });
+      closeModal();
+    } catch (err) {
+      setModalError(err.response?.data?.message || 'Failed to create vehicle');
+    } finally { setModalLoading(false); }
+  };
+
+  const handleDriverSubmit = async (e) => {
+    e.preventDefault();
+    setModalLoading(true); setModalError('');
+    try {
+      await driverService.create({
+        name: driverForm.name,
+        phone: driverForm.phone,
+        email: driverForm.email || null,
+        license_number: driverForm.license_number,
+        license_expiry: driverForm.license_expiry || null,
+        status: driverForm.status,
+      });
+      setDriverForm({ name: '', phone: '', email: '', license_number: '', license_expiry: '', status: 'available' });
+      closeModal();
+    } catch (err) {
+      setModalError(err.response?.data?.message || 'Failed to create driver');
+    } finally { setModalLoading(false); }
+  };
+
+  const handleTripSubmit = async (e) => {
+    e.preventDefault();
+    // placeholder — backend trip endpoint not yet implemented
+    setTripForm({ vehicle_number: '', driver_phone: '', origin: '', destination: '', date: '', distance: '' });
+    closeModal();
+  };
+
+  const handleMaintenanceSubmit = async (e) => {
+    e.preventDefault();
+    setMaintenanceForm({ vehicle_number: '', type: '', description: '', date: '', cost: '' });
+    closeModal();
+  };
+
+  const handleExpenseSubmit = async (e) => {
+    e.preventDefault();
+    setExpenseForm({ vehicle_number: '', category: '', amount: '', date: '', notes: '' });
+    closeModal();
+  };
+
+  const { totalV, activeV, maintV, inactiveV } = useMemo(() => {
+    const total = vehicles.length;
+    const active = vehicles.filter(v => v.status === 'active').length;
+    const maint = vehicles.filter(v => v.status === 'maintenance').length;
+    return { totalV: total, activeV: active, maintV: maint, inactiveV: total - active - maint };
+  }, [vehicles]);
+
+  const { totalD, availD, assignedD, inactiveD } = useMemo(() => {
+    const total = drivers.length;
+    const avail = drivers.filter(d => d.status === 'available').length;
+    const assigned = drivers.filter(d => d.status === 'assigned').length;
+    return { totalD: total, availD: avail, assignedD: assigned, inactiveD: total - avail - assigned };
+  }, [drivers]);
+
+  const filteredVehicles = useMemo(() =>
+    vehicles.filter(v => [v.vehicle_number, v.make, v.model, v.license_plate, v.status].join(' ').toLowerCase().includes(searchTerm.toLowerCase())),
+    [vehicles, searchTerm]);
+
+  const filteredDrivers = useMemo(() =>
+    drivers.filter(d => [d.name, d.email, d.license_number, d.status].join(' ').toLowerCase().includes(searchTerm.toLowerCase())),
+    [drivers, searchTerm]);
+
+  const toggleRow = useCallback(pk => {
+    setSelectedRows(prev => prev.includes(pk) ? prev.filter(r => r !== pk) : [...prev, pk]);
+  }, []);
+
+  const vehicleSegments = [
+    { label: 'Active', value: activeV, pct: totalV ? Math.round(activeV/totalV*100) : 0, color: '#1a1a1a' },
+    { label: 'Maintenance', value: maintV, pct: totalV ? Math.round(maintV/totalV*100) : 0, color: '#e8d44d' },
+    { label: 'Inactive', value: inactiveV, pct: totalV ? Math.round(inactiveV/totalV*100) : 0, color: '#c8c8c8' },
+  ];
+  const driverSegments = [
+    { label: 'Available', value: availD, pct: totalD ? Math.round(availD/totalD*100) : 0, color: '#1a1a1a' },
+    { label: 'Assigned', value: assignedD, pct: totalD ? Math.round(assignedD/totalD*100) : 0, color: '#e8d44d' },
+    { label: 'Inactive', value: inactiveD, pct: totalD ? Math.round(inactiveD/totalD*100) : 0, color: '#c8c8c8' },
+  ];
+  const segments = activeTab === 'Drivers' ? driverSegments : vehicleSegments;
+
+  const styles = {
+    root: {
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100vh',
+      fontFamily: "'DM Sans', 'Helvetica Neue', sans-serif",
+      background: 'linear-gradient(135deg, #b8f55a 0%, #d4f76e 25%, #f0f870 50%, #f5f870 70%, #fafad0 100%)',
+      minHeight: '100vh',
+    },
+    topbar: {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: '10px 20px',
+      background: 'transparent',
+    },
+    logo: {
+      background: '#111',
+      color: '#fff',
+      fontWeight: 700,
+      fontSize: '15px',
+      padding: '7px 18px',
+      borderRadius: '20px',
+      letterSpacing: '-0.3px',
+    },
+    accountBtn: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '6px',
+      background: 'rgba(255,255,255,0.85)',
+      border: '1px solid rgba(0,0,0,0.1)',
+      borderRadius: '20px',
+      padding: '6px 14px',
+      fontSize: '13px',
+      fontWeight: 500,
+      cursor: 'pointer',
+      backdropFilter: 'blur(8px)',
+    },
+    body: {
+      display: 'flex',
+      flex: 1,
+      gap: '12px',
+      padding: '0 14px 14px 14px',
+      overflow: 'hidden',
+    },
+    sidebar: {
+      width: '180px',
+      background: 'rgba(255,255,255,0.75)',
+      borderRadius: '16px',
+      padding: '10px 8px',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '2px',
+      backdropFilter: 'blur(12px)',
+      border: '1px solid rgba(255,255,255,0.9)',
+      flexShrink: 0,
+    },
+    navItem: (active) => ({
+      padding: '10px 14px',
+      borderRadius: '10px',
+      fontSize: '13px',
+      fontWeight: active ? 600 : 400,
+      cursor: 'pointer',
+      background: active ? '#111' : 'transparent',
+      color: active ? '#fff' : '#333',
+      border: 'none',
+      textAlign: 'left',
+      width: '100%',
+      transition: 'all 0.15s ease',
+    }),
+    logoutBtn: {
+      marginTop: '20px',
+      padding: '12px 16px',
+      borderRadius: '10px',
+      fontSize: '14px',
+      fontWeight: 600,
+      cursor: 'pointer',
+      background: '#dc2626',
+      color: '#fff',
+      border: 'none',
+      textAlign: 'center',
+      width: '100%',
+      transition: 'all 0.15s ease',
+    },
+    main: {
+      flex: 1,
+      background: 'rgba(235,240,220,0.55)',
+      borderRadius: '16px',
+      padding: '18px 20px',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '14px',
+      backdropFilter: 'blur(8px)',
+      border: '1px solid rgba(255,255,255,0.7)',
+      overflow: 'auto',
+    },
+    statBar: {
+      background: 'rgba(255,255,255,0.6)',
+      borderRadius: '10px',
+      padding: '10px 14px',
+      border: '1.5px solid rgba(255,255,255,0.9)',
+    },
+    statLabels: {
+      display: 'flex',
+      gap: '16px',
+      marginBottom: '8px',
+    },
+    statLabelItem: {
+      fontSize: '12px',
+      color: '#555',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '4px',
+    },
+    segBar: {
+      display: 'flex',
+      borderRadius: '6px',
+      overflow: 'hidden',
+      height: '10px',
+    },
+    cardsRow: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(3, 1fr)',
+      gap: '14px',
+    },
+    card: {
+      background: 'rgba(255,255,255,0.85)',
+      borderRadius: '14px',
+      padding: '20px',
+      border: '1px solid rgba(255,255,255,0.95)',
+      minHeight: '120px',
+    },
+    cardTitle: {
+      fontSize: '12px',
+      fontWeight: 600,
+      color: '#888',
+      textTransform: 'uppercase',
+      letterSpacing: '0.5px',
+      marginBottom: '8px',
+    },
+    cardNumber: {
+      fontSize: '36px',
+      fontWeight: 700,
+      color: '#111',
+      lineHeight: 1.1,
+    },
+    cardSub: {
+      fontSize: '12px',
+      color: '#888',
+      marginTop: '6px',
+    },
+    tableCard: {
+      background: 'rgba(255,255,255,0.85)',
+      borderRadius: '14px',
+      border: '1px solid rgba(255,255,255,0.95)',
+      overflow: 'hidden',
+    },
+    table: {
+      width: '100%',
+      borderCollapse: 'collapse',
+      fontSize: '13px',
+    },
+    th: {
+      padding: '10px 14px',
+      textAlign: 'left',
+      fontWeight: 600,
+      color: '#888',
+      fontSize: '11px',
+      textTransform: 'uppercase',
+      letterSpacing: '0.4px',
+      borderBottom: '1px solid #eee',
+      background: '#fafafa',
+    },
+    td: {
+      padding: '10px 14px',
+      borderBottom: '1px solid #f0f0f0',
+      color: '#333',
+    },
+    statusBadge: (status) => ({
+      padding: '3px 10px',
+      borderRadius: '20px',
+      fontSize: '11px',
+      fontWeight: 600,
+      background: status === 'active' || status === 'available' ? '#dcfce7' : status === 'maintenance' || status === 'assigned' ? '#fef9c3' : '#f1f5f9',
+      color: status === 'active' || status === 'available' ? '#166534' : status === 'maintenance' || status === 'assigned' ? '#854d0e' : '#64748b',
+    }),
+    actionRow: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    addBtn: {
+      background: '#111',
+      color: '#fff',
+      border: 'none',
+      borderRadius: '8px',
+      padding: '8px 16px',
+      fontSize: '13px',
+      fontWeight: 600,
+      cursor: 'pointer',
+    },
+    searchInput: {
+      border: '1px solid #ddd',
+      borderRadius: '8px',
+      padding: '7px 12px',
+      fontSize: '13px',
+      background: 'rgba(255,255,255,0.8)',
+      outline: 'none',
+      width: '200px',
+    },
+    filterRow: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    chip: {
+      border: '1px solid #ddd',
+      borderRadius: '6px',
+      padding: '5px 10px',
+      fontSize: '12px',
+      background: 'rgba(255,255,255,0.7)',
+      cursor: 'pointer',
+      marginRight: '6px',
+    },
+    pageTitle: {
+      fontSize: '20px',
+      fontWeight: 700,
+      color: '#111',
+      margin: 0,
+    },
+    profilePopup: {
+      position: 'absolute',
+      top: '60px',
+      right: '20px',
+      background: 'rgba(255,255,255,0.95)',
+      borderRadius: '16px',
+      padding: '24px',
+      minWidth: '280px',
+      boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+      border: '1px solid rgba(255,255,255,0.9)',
+      backdropFilter: 'blur(12px)',
+      zIndex: 1000,
+    },
+    profileHeader: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '12px',
+      marginBottom: '20px',
+      paddingBottom: '16px',
+      borderBottom: '1px solid rgba(0,0,0,0.08)',
+    },
+    profileAvatar: {
+      width: '56px',
+      height: '56px',
+      borderRadius: '50%',
+      background: 'linear-gradient(135deg, #111 0%, #333 100%)',
+      color: '#fff',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontSize: '24px',
+      fontWeight: 700,
+    },
+    profileInfo: {
+      flex: 1,
+    },
+    profileName: {
+      fontSize: '16px',
+      fontWeight: 700,
+      color: '#111',
+      marginBottom: '4px',
+    },
+    profileRole: {
+      fontSize: '12px',
+      color: '#888',
+      textTransform: 'capitalize',
+    },
+    profileDetail: {
+      marginBottom: '14px',
+    },
+    profileLabel: {
+      fontSize: '11px',
+      fontWeight: 600,
+      color: '#888',
+      textTransform: 'uppercase',
+      letterSpacing: '0.5px',
+      marginBottom: '4px',
+    },
+    profileValue: {
+      fontSize: '14px',
+      color: '#333',
+      fontWeight: 500,
+    },
+    closeBtn: {
+      position: 'absolute',
+      top: '12px',
+      right: '12px',
+      background: 'transparent',
+      border: 'none',
+      cursor: 'pointer',
+      padding: '4px',
+      color: '#888',
+      fontSize: '20px',
+      lineHeight: 1,
+    },
+    overlay: {
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      zIndex: 999,
+    },
+  };
+
+  const isDashboard = activeTab === 'Dashboard';
+  const isVehicles = activeTab === 'Vehicle Registry';
+  const isDrivers = activeTab === 'Drivers';
+
+  return (
+    <div style={styles.root}>
+      {/* Profile Popup Overlay */}
+      {showProfile && <div style={styles.overlay} onClick={() => setShowProfile(false)} />}
+
+      {/* Profile Popup */}
+      {showProfile && (
+        <div style={styles.profilePopup}>
+          <button style={styles.closeBtn} onClick={() => setShowProfile(false)}>×</button>
+          <div style={styles.profileHeader}>
+            <div style={styles.profileAvatar}>
+              {user?.username?.charAt(0)?.toUpperCase() || user?.phone?.charAt(0) || 'U'}
+            </div>
+            <div style={styles.profileInfo}>
+              <div style={styles.profileName}>
+                {user?.username || 'User'}
+              </div>
+              <div style={styles.profileRole}>{user?.role || 'user'}</div>
+            </div>
+          </div>
+          <div style={styles.profileDetail}>
+            <div style={styles.profileLabel}>Phone Number</div>
+            <div style={styles.profileValue}>{user?.phone || 'N/A'}</div>
+          </div>
+          <div style={styles.profileDetail}>
+            <div style={styles.profileLabel}>Email</div>
+            <div style={styles.profileValue}>{user?.email || 'N/A'}</div>
+          </div>
+          <div style={styles.profileDetail}>
+            <div style={styles.profileLabel}>Member Since</div>
+            <div style={styles.profileValue}>
+              {user?.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}
+            </div>
+          </div>
+          <button
+            style={styles.logoutBtn}
+            onClick={() => {
+              logout();
+              navigate('/login');
+            }}
+          >
+            Logout
+          </button>
+        </div>
+      )}
+
+      {/* Top Bar */}
+      <header style={styles.topbar}>
+        <div style={styles.logo}>FleeFo</div>
+        <button style={styles.accountBtn} onClick={() => setShowProfile(!showProfile)}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+          Account
+        </button>
+      </header>
+
+      {/* Body */}
+      <div style={styles.body}>
+        {/* Sidebar */}
+        <aside style={styles.sidebar}>
+          {NAV_ITEMS.map(item => (
+            <button
+              key={item}
+              style={styles.navItem(activeTab === item)}
+              onClick={() => setActiveTab(item)}
+            >
+              {item}
+            </button>
+          ))}
+        </aside>
+
+        {/* Main content */}
+        <main style={styles.main}>
+          <h1 style={styles.pageTitle}>{activeTab}</h1>
+
+          {/* Stat bar */}
+          <div style={styles.statBar}>
+            <div style={styles.statLabels}>
+              {segments.map(s => (
+                <span key={s.label} style={styles.statLabelItem}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: s.color, display: 'inline-block' }}></span>
+                  {s.label} <strong>{s.pct}%</strong>
+                </span>
+              ))}
+            </div>
+            <div style={styles.segBar}>
+              {segments.map(s => (
+                <div key={s.label} style={{ width: `${s.pct || 1}%`, background: s.color, transition: 'width 0.4s ease' }} />
+              ))}
+            </div>
+          </div>
+
+          {/* Dashboard: 3 summary cards */}
+          {isDashboard && (
+            <div style={styles.cardsRow}>
+              <div style={styles.card}>
+                <div style={styles.cardTitle}>Total Vehicles</div>
+                <div style={styles.cardNumber}>{totalV}</div>
+                <div style={styles.cardSub}>Active: {activeV} · Maintenance: {maintV}</div>
+              </div>
+              <div style={styles.card}>
+                <div style={styles.cardTitle}>Total Drivers</div>
+                <div style={styles.cardNumber}>{totalD}</div>
+                <div style={styles.cardSub}>Available: {availD} · Assigned: {assignedD}</div>
+              </div>
+              <div style={styles.card}>
+                <div style={styles.cardTitle}>Fleet Utilization</div>
+                <div style={styles.cardNumber}>{totalV ? Math.round(activeV/totalV*100) : 0}%</div>
+                <div style={styles.cardSub}>Active vehicles in operation</div>
+              </div>
+            </div>
+          )}
+
+          {/* Tables for non-dashboard tabs */}
+          {!isDashboard && (
+            <>
+              <div style={styles.actionRow}>
+                <div></div>
+                <button style={styles.addBtn} onClick={() => {
+                  if (activeTab === 'Vehicle Registry') openModal('vehicle');
+                  else if (activeTab === 'Trip Dispatcher') openModal('trip');
+                  else if (activeTab === 'Maintenance') openModal('maintenance');
+                  else if (activeTab === 'Trip & Expense') openModal('expense');
+                  else openModal('driver');
+                }}>+ Add {activeTab === 'Vehicle Registry' ? 'Vehicle' : activeTab === 'Trip Dispatcher' ? 'Trip' : activeTab === 'Maintenance' ? 'Record' : activeTab === 'Trip & Expense' ? 'Expense' : 'Item'}</button>
+              </div>
+              <div style={styles.filterRow}>
+                <div>
+                  <span style={styles.chip}>Columns ▾</span>
+                  <span style={styles.chip}>Status ▾</span>
+                </div>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <input
+                    style={styles.searchInput}
+                    type="text"
+                    placeholder="Search..."
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                  />
+                  <button style={{ ...styles.chip, margin: 0 }}>↗ Export</button>
+                </div>
+              </div>
+              <div style={styles.tableCard}>
+                {isVehicles && (
+                  <table style={styles.table}>
+                    <thead>
+                      <tr>
+                        <th style={styles.th}><input type="checkbox" /></th>
+                        <th style={styles.th}>Vehicle #</th>
+                        <th style={styles.th}>Make</th>
+                        <th style={styles.th}>Model</th>
+                        <th style={styles.th}>Plate</th>
+                        <th style={styles.th}>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredVehicles.map(v => (
+                        <tr key={v.id} style={{ background: selectedRows.includes(v.id) ? '#fafff0' : 'transparent' }}>
+                          <td style={styles.td}><input type="checkbox" checked={selectedRows.includes(v.id)} onChange={() => toggleRow(v.id)} /></td>
+                          <td style={styles.td}>{v.vehicle_number}</td>
+                          <td style={styles.td}>{v.make}</td>
+                          <td style={styles.td}>{v.model}</td>
+                          <td style={styles.td}>{v.license_plate}</td>
+                          <td style={styles.td}><span style={styles.statusBadge(v.status)}>{v.status}</span></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+                {!isVehicles && (
+                  <div style={{ padding: '40px', textAlign: 'center', color: '#aaa', fontSize: '14px' }}>
+                    {activeTab} — coming soon
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </main>
+      </div>
+
+      {/* ========== MODAL OVERLAY ========== */}
+      {modalOpen && (
+        <div className="modal-overlay" onClick={closeModal}>
+          <div className="modal-popup" onClick={e => e.stopPropagation()}>
+            <button className="modal-close" onClick={closeModal}>×</button>
+
+            {/* ---- Add Vehicle ---- */}
+            {modalOpen === 'vehicle' && (
+              <form onSubmit={handleVehicleSubmit}>
+                <h2 className="modal-title">Add Vehicle</h2>
+                {modalError && <div className="modal-error">{modalError}</div>}
+                <label className="modal-label">Vehicle Number *
+                  <input className="modal-input" required value={vehicleForm.vehicle_number} onChange={e => setVehicleForm({...vehicleForm, vehicle_number: e.target.value})} placeholder="e.g. V006" />
+                </label>
+                <label className="modal-label">Holding Capacity
+                  <input className="modal-input" type="number" value={vehicleForm.holding_capacity} onChange={e => setVehicleForm({...vehicleForm, holding_capacity: e.target.value})} placeholder="Passengers / Cargo" />
+                </label>
+                <label className="modal-label">Mileage
+                  <input className="modal-input" type="number" value={vehicleForm.mileage} onChange={e => setVehicleForm({...vehicleForm, mileage: e.target.value})} placeholder="0" />
+                </label>
+                <label className="modal-label">Status
+                  <select className="modal-input" value={vehicleForm.status} onChange={e => setVehicleForm({...vehicleForm, status: e.target.value})}>
+                    <option value="active">Active</option>
+                    <option value="maintenance">Maintenance</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </label>
+                <label className="modal-label">Driver Phone
+                  <input className="modal-input" value={vehicleForm.driver_phone} onChange={e => setVehicleForm({...vehicleForm, driver_phone: e.target.value})} placeholder="Optional" />
+                </label>
+                <button className="modal-submit" type="submit" disabled={modalLoading}>{modalLoading ? 'Creating…' : 'Add Vehicle'}</button>
+              </form>
+            )}
+
+            {/* ---- Add Driver ---- */}
+            {modalOpen === 'driver' && (
+              <form onSubmit={handleDriverSubmit}>
+                <h2 className="modal-title">Add Driver</h2>
+                {modalError && <div className="modal-error">{modalError}</div>}
+                <label className="modal-label">Full Name *
+                  <input className="modal-input" required value={driverForm.name} onChange={e => setDriverForm({...driverForm, name: e.target.value})} placeholder="John Doe" />
+                </label>
+                <label className="modal-label">Phone *
+                  <input className="modal-input" required value={driverForm.phone} onChange={e => setDriverForm({...driverForm, phone: e.target.value})} placeholder="+1234567890" />
+                </label>
+                <label className="modal-label">Email
+                  <input className="modal-input" type="email" value={driverForm.email} onChange={e => setDriverForm({...driverForm, email: e.target.value})} placeholder="driver@fleet.com" />
+                </label>
+                <label className="modal-label">License Number *
+                  <input className="modal-input" required value={driverForm.license_number} onChange={e => setDriverForm({...driverForm, license_number: e.target.value})} placeholder="DL-XXXXX" />
+                </label>
+                <label className="modal-label">License Expiry
+                  <input className="modal-input" type="date" value={driverForm.license_expiry} onChange={e => setDriverForm({...driverForm, license_expiry: e.target.value})} />
+                </label>
+                <label className="modal-label">Status
+                  <select className="modal-input" value={driverForm.status} onChange={e => setDriverForm({...driverForm, status: e.target.value})}>
+                    <option value="available">Available</option>
+                    <option value="assigned">Assigned</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </label>
+                <button className="modal-submit" type="submit" disabled={modalLoading}>{modalLoading ? 'Creating…' : 'Add Driver'}</button>
+              </form>
+            )}
+
+            {/* ---- Add Trip ---- */}
+            {modalOpen === 'trip' && (
+              <form onSubmit={handleTripSubmit}>
+                <h2 className="modal-title">Dispatch Trip</h2>
+                {modalError && <div className="modal-error">{modalError}</div>}
+                <label className="modal-label">Vehicle Number *
+                  <input className="modal-input" required value={tripForm.vehicle_number} onChange={e => setTripForm({...tripForm, vehicle_number: e.target.value})} placeholder="V001" />
+                </label>
+                <label className="modal-label">Driver Phone *
+                  <input className="modal-input" required value={tripForm.driver_phone} onChange={e => setTripForm({...tripForm, driver_phone: e.target.value})} placeholder="+1234567890" />
+                </label>
+                <label className="modal-label">Origin *
+                  <input className="modal-input" required value={tripForm.origin} onChange={e => setTripForm({...tripForm, origin: e.target.value})} placeholder="City A" />
+                </label>
+                <label className="modal-label">Destination *
+                  <input className="modal-input" required value={tripForm.destination} onChange={e => setTripForm({...tripForm, destination: e.target.value})} placeholder="City B" />
+                </label>
+                <label className="modal-label">Date
+                  <input className="modal-input" type="date" value={tripForm.date} onChange={e => setTripForm({...tripForm, date: e.target.value})} />
+                </label>
+                <label className="modal-label">Distance (km)
+                  <input className="modal-input" type="number" value={tripForm.distance} onChange={e => setTripForm({...tripForm, distance: e.target.value})} placeholder="0" />
+                </label>
+                <button className="modal-submit" type="submit" disabled={modalLoading}>{modalLoading ? 'Dispatching…' : 'Dispatch Trip'}</button>
+              </form>
+            )}
+
+            {/* ---- Add Maintenance ---- */}
+            {modalOpen === 'maintenance' && (
+              <form onSubmit={handleMaintenanceSubmit}>
+                <h2 className="modal-title">Add Maintenance Record</h2>
+                {modalError && <div className="modal-error">{modalError}</div>}
+                <label className="modal-label">Vehicle Number *
+                  <input className="modal-input" required value={maintenanceForm.vehicle_number} onChange={e => setMaintenanceForm({...maintenanceForm, vehicle_number: e.target.value})} placeholder="V001" />
+                </label>
+                <label className="modal-label">Type *
+                  <select className="modal-input" required value={maintenanceForm.type} onChange={e => setMaintenanceForm({...maintenanceForm, type: e.target.value})}>
+                    <option value="">Select type…</option>
+                    <option value="oil_change">Oil Change</option>
+                    <option value="tire_rotation">Tire Rotation</option>
+                    <option value="brake_service">Brake Service</option>
+                    <option value="engine_repair">Engine Repair</option>
+                    <option value="general">General Service</option>
+                  </select>
+                </label>
+                <label className="modal-label">Description
+                  <textarea className="modal-input modal-textarea" value={maintenanceForm.description} onChange={e => setMaintenanceForm({...maintenanceForm, description: e.target.value})} placeholder="Details…" />
+                </label>
+                <label className="modal-label">Date
+                  <input className="modal-input" type="date" value={maintenanceForm.date} onChange={e => setMaintenanceForm({...maintenanceForm, date: e.target.value})} />
+                </label>
+                <label className="modal-label">Cost ($)
+                  <input className="modal-input" type="number" value={maintenanceForm.cost} onChange={e => setMaintenanceForm({...maintenanceForm, cost: e.target.value})} placeholder="0" />
+                </label>
+                <button className="modal-submit" type="submit" disabled={modalLoading}>{modalLoading ? 'Saving…' : 'Add Record'}</button>
+              </form>
+            )}
+
+            {/* ---- Add Expense ---- */}
+            {modalOpen === 'expense' && (
+              <form onSubmit={handleExpenseSubmit}>
+                <h2 className="modal-title">Add Expense</h2>
+                {modalError && <div className="modal-error">{modalError}</div>}
+                <label className="modal-label">Vehicle Number *
+                  <input className="modal-input" required value={expenseForm.vehicle_number} onChange={e => setExpenseForm({...expenseForm, vehicle_number: e.target.value})} placeholder="V001" />
+                </label>
+                <label className="modal-label">Category *
+                  <select className="modal-input" required value={expenseForm.category} onChange={e => setExpenseForm({...expenseForm, category: e.target.value})}>
+                    <option value="">Select category…</option>
+                    <option value="fuel">Fuel</option>
+                    <option value="toll">Toll</option>
+                    <option value="parking">Parking</option>
+                    <option value="repair">Repair</option>
+                    <option value="insurance">Insurance</option>
+                    <option value="other">Other</option>
+                  </select>
+                </label>
+                <label className="modal-label">Amount ($) *
+                  <input className="modal-input" type="number" required value={expenseForm.amount} onChange={e => setExpenseForm({...expenseForm, amount: e.target.value})} placeholder="0.00" />
+                </label>
+                <label className="modal-label">Date
+                  <input className="modal-input" type="date" value={expenseForm.date} onChange={e => setExpenseForm({...expenseForm, date: e.target.value})} />
+                </label>
+                <label className="modal-label">Notes
+                  <textarea className="modal-input modal-textarea" value={expenseForm.notes} onChange={e => setExpenseForm({...expenseForm, notes: e.target.value})} placeholder="Optional notes…" />
+                </label>
+                <button className="modal-submit" type="submit" disabled={modalLoading}>{modalLoading ? 'Saving…' : 'Add Expense'}</button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

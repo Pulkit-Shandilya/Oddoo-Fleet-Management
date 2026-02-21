@@ -12,10 +12,10 @@ def get_drivers():
     drivers = Driver.query.all()
     return jsonify({'drivers': [driver.to_dict() for driver in drivers]}), 200
 
-@drivers_bp.route('/<string:license_number>', methods=['GET'])
+@drivers_bp.route('/<string:phone>', methods=['GET'])
 @jwt_required()
-def get_driver(license_number):
-    driver = Driver.query.get(license_number)
+def get_driver(phone):
+    driver = Driver.query.get(phone)
     
     if not driver:
         return jsonify({'message': 'Driver not found'}), 404
@@ -25,8 +25,8 @@ def get_driver(license_number):
 @drivers_bp.route('/', methods=['POST'])
 @jwt_required()
 def create_driver():
-    current_user_id = get_jwt_identity()
-    user = User.query.get(current_user_id)
+    current_user_phone = get_jwt_identity()
+    user = User.query.get(current_user_phone)
     
     # Check if user has permission
     if user.role not in ['admin', 'manager']:
@@ -35,8 +35,12 @@ def create_driver():
     data = request.get_json()
     
     # Validate required fields
-    if not data or not data.get('name') or not data.get('license_number'):
+    if not data or not data.get('name') or not data.get('phone') or not data.get('license_number'):
         return jsonify({'message': 'Missing required fields'}), 400
+    
+    # Check if phone number already exists
+    if Driver.query.filter_by(phone=data['phone']).first():
+        return jsonify({'message': 'Phone number already exists'}), 400
     
     # Check if license number already exists
     if Driver.query.filter_by(license_number=data['license_number']).first():
@@ -52,9 +56,9 @@ def create_driver():
     
     # Create new driver
     driver = Driver(
+        phone=data['phone'],
         name=data['name'],
         email=data.get('email'),
-        phone=data.get('phone'),
         license_number=data['license_number'],
         license_expiry=license_expiry,
         status=data.get('status', 'available')
@@ -68,17 +72,17 @@ def create_driver():
         'driver': driver.to_dict()
     }), 201
 
-@drivers_bp.route('/<string:license_number>', methods=['PUT'])
+@drivers_bp.route('/<string:phone>', methods=['PUT'])
 @jwt_required()
-def update_driver(license_number):
-    current_user_id = get_jwt_identity()
-    user = User.query.get(current_user_id)
+def update_driver(phone):
+    current_user_phone = get_jwt_identity()
+    user = User.query.get(current_user_phone)
     
     # Check if user has permission
     if user.role not in ['admin', 'manager']:
         return jsonify({'message': 'Unauthorized'}), 403
     
-    driver = Driver.query.get(license_number)
+    driver = Driver.query.get(phone)
     
     if not driver:
         return jsonify({'message': 'Driver not found'}), 404
@@ -90,8 +94,6 @@ def update_driver(license_number):
         driver.name = data['name']
     if 'email' in data:
         driver.email = data['email']
-    if 'phone' in data:
-        driver.phone = data['phone']
     if 'license_number' in data:
         driver.license_number = data['license_number']
     if 'license_expiry' in data:
@@ -109,17 +111,17 @@ def update_driver(license_number):
         'driver': driver.to_dict()
     }), 200
 
-@drivers_bp.route('/<string:license_number>', methods=['DELETE'])
+@drivers_bp.route('/<string:phone>', methods=['DELETE'])
 @jwt_required()
-def delete_driver(license_number):
-    current_user_id = get_jwt_identity()
-    user = User.query.get(current_user_id)
+def delete_driver(phone):
+    current_user_phone = get_jwt_identity()
+    user = User.query.get(current_user_phone)
     
     # Check if user has permission
     if user.role != 'admin':
         return jsonify({'message': 'Unauthorized'}), 403
     
-    driver = Driver.query.get(license_number)
+    driver = Driver.query.get(phone)
     
     if not driver:
         return jsonify({'message': 'Driver not found'}), 404

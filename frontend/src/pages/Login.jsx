@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import './Login.css';
@@ -6,12 +6,13 @@ import './Login.css';
 const Login = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [formData, setFormData] = useState({
-    username: '',
+    phone: '',
     email: '',
     password: '',
   });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { login, register } = useAuth();
   const navigate = useNavigate();
 
@@ -26,25 +27,36 @@ const Login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setError('');
     setSuccess('');
+    setIsSubmitting(true);
 
-    if (isLogin) {
-      const result = await login(formData.username, formData.password);
-      if (result.success) {
-        navigate('/dashboard');
+    try {
+      if (isLogin) {
+        const result = await login(formData.phone, formData.password);
+        if (result.success) {
+          navigate('/dashboard');
+        } else {
+          setError(result.message);
+        }
       } else {
-        setError(result.message);
+        const registerResult = await register(formData);
+        if (registerResult.success) {
+          setSuccess('Registration successful! Logging you in...');
+          const loginResult = await login(formData.phone, formData.password);
+          if (loginResult.success) {
+            navigate('/dashboard');
+          } else {
+            setError('Registration successful but auto-login failed. Please login manually.');
+            setTimeout(() => setIsLogin(true), 2000);
+          }
+        } else {
+          setError(registerResult.message);
+        }
       }
-    } else {
-      const result = await register(formData);
-      if (result.success) {
-        setSuccess(result.message);
-        setFormData({ username: '', email: '', password: '' });
-        setTimeout(() => setIsLogin(true), 2000);
-      } else {
-        setError(result.message);
-      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -59,11 +71,12 @@ const Login = () => {
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">
-            <label>Username</label>
+            <label>Phone Number</label>
             <input
-              type="text"
-              name="username"
-              value={formData.username}
+              type="tel"
+              name="phone"
+              placeholder="Enter your phone number"
+              value={formData.phone}
               onChange={handleChange}
               required
             />
@@ -93,8 +106,8 @@ const Login = () => {
             />
           </div>
 
-          <button type="submit" className="btn-primary">
-            {isLogin ? 'Login' : 'Register'}
+          <button type="submit" className="btn-primary" disabled={isSubmitting}>
+            {isSubmitting ? 'Please wait…' : isLogin ? 'Login' : 'Register'}
           </button>
         </form>
 

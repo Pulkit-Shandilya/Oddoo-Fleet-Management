@@ -1,236 +1,417 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { vehicleService, driverService } from '../services/api';
-import VehicleTable from '../components/VehicleTable';
-import DriverTable from '../components/DriverTable';
-import './Dashboard.css';
 
-const NAV_TABS = ['Dashboard', 'Vehicles', 'Drivers'];
+const NAV_ITEMS = ['Dashboard', 'Vehicle Registry', 'Trip Dispatcher', 'Maintenance', 'Trip & Expense', 'Performance', 'Analytics'];
 
-const Dashboard = () => {
-  const [vehicles, setVehicles] = useState([]);
-  const [drivers, setDrivers] = useState([]);
-  const [activeTab, setActiveTab] = useState('dashboard');
+const mockVehicles = [
+  { id: 1, vehicle_number: 'V001', make: 'Ford', model: 'Transit', license_plate: 'ABC123', status: 'active' },
+  { id: 2, vehicle_number: 'V002', make: 'Mercedes', model: 'Sprinter', license_plate: 'DEF456', status: 'maintenance' },
+  { id: 3, vehicle_number: 'V003', make: 'Toyota', model: 'HiAce', license_plate: 'GHI789', status: 'inactive' },
+  { id: 4, vehicle_number: 'V004', make: 'Volkswagen', model: 'Crafter', license_plate: 'JKL012', status: 'active' },
+  { id: 5, vehicle_number: 'V005', make: 'Iveco', model: 'Daily', license_plate: 'MNO345', status: 'active' },
+];
+
+const mockDrivers = [
+  { id: 1, name: 'James Wilson', email: 'james@fleet.com', license_number: 'DL001', status: 'available' },
+  { id: 2, name: 'Sarah Chen', email: 'sarah@fleet.com', license_number: 'DL002', status: 'assigned' },
+  { id: 3, name: 'Mike Torres', email: 'mike@fleet.com', license_number: 'DL003', status: 'inactive' },
+  { id: 4, name: 'Priya Patel', email: 'priya@fleet.com', license_number: 'DL004', status: 'available' },
+];
+
+export default function Dashboard() {
+  const [vehicles] = useState(mockVehicles);
+  const [drivers] = useState(mockDrivers);
+  const [activeTab, setActiveTab] = useState('Dashboard');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRows, setSelectedRows] = useState([]);
-  const [loading, setLoading] = useState(true);
 
-  const fetchData = useCallback(async () => {
-    try {
-      setLoading(true);
-      const [vehiclesRes, driversRes] = await Promise.all([
-        vehicleService.getAll(),
-        driverService.getAll(),
-      ]);
-      setVehicles(vehiclesRes.data.vehicles || []);
-      setDrivers(driversRes.data.drivers || []);
-    } catch (error) {
-      console.error('Error fetching data:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  // --- Derived stats (memoised) ---
   const { totalV, activeV, maintV, inactiveV } = useMemo(() => {
     const total = vehicles.length;
-    const active = vehicles.filter((v) => v.status === 'active').length;
-    const maint = vehicles.filter((v) => v.status === 'maintenance').length;
+    const active = vehicles.filter(v => v.status === 'active').length;
+    const maint = vehicles.filter(v => v.status === 'maintenance').length;
     return { totalV: total, activeV: active, maintV: maint, inactiveV: total - active - maint };
   }, [vehicles]);
 
   const { totalD, availD, assignedD, inactiveD } = useMemo(() => {
     const total = drivers.length;
-    const avail = drivers.filter((d) => d.status === 'available').length;
-    const assigned = drivers.filter((d) => d.status === 'assigned').length;
+    const avail = drivers.filter(d => d.status === 'available').length;
+    const assigned = drivers.filter(d => d.status === 'assigned').length;
     return { totalD: total, availD: avail, assignedD: assigned, inactiveD: total - avail - assigned };
   }, [drivers]);
 
-  // --- Filtered lists ---
-  const filteredVehicles = useMemo(
-    () =>
-      vehicles.filter((v) =>
-        [v.vehicle_number, v.make, v.model, v.license_plate, v.status]
-          .join(' ')
-          .toLowerCase()
-          .includes(searchTerm.toLowerCase())
-      ),
-    [vehicles, searchTerm]
-  );
+  const filteredVehicles = useMemo(() =>
+    vehicles.filter(v => [v.vehicle_number, v.make, v.model, v.license_plate, v.status].join(' ').toLowerCase().includes(searchTerm.toLowerCase())),
+    [vehicles, searchTerm]);
 
-  const filteredDrivers = useMemo(
-    () =>
-      drivers.filter((d) =>
-        [d.name, d.email, d.license_number, d.status]
-          .join(' ')
-          .toLowerCase()
-          .includes(searchTerm.toLowerCase())
-      ),
-    [drivers, searchTerm]
-  );
+  const filteredDrivers = useMemo(() =>
+    drivers.filter(d => [d.name, d.email, d.license_number, d.status].join(' ').toLowerCase().includes(searchTerm.toLowerCase())),
+    [drivers, searchTerm]);
 
-  // --- Row selection ---
-  const toggleRow = useCallback((pk) => {
-    setSelectedRows((prev) =>
-      prev.includes(pk) ? prev.filter((r) => r !== pk) : [...prev, pk]
-    );
+  const toggleRow = useCallback(pk => {
+    setSelectedRows(prev => prev.includes(pk) ? prev.filter(r => r !== pk) : [...prev, pk]);
   }, []);
 
-  // --- Stat bar segments ---
-  const buildSegments = (items) =>
-    items.map(([label, value, total, color]) => ({
-      label,
-      value,
-      pct: total ? Math.round((value / total) * 100) : 0,
-      color,
-    }));
+  const vehicleSegments = [
+    { label: 'Active', value: activeV, pct: totalV ? Math.round(activeV/totalV*100) : 0, color: '#1a1a1a' },
+    { label: 'Maintenance', value: maintV, pct: totalV ? Math.round(maintV/totalV*100) : 0, color: '#e8d44d' },
+    { label: 'Inactive', value: inactiveV, pct: totalV ? Math.round(inactiveV/totalV*100) : 0, color: '#c8c8c8' },
+  ];
+  const driverSegments = [
+    { label: 'Available', value: availD, pct: totalD ? Math.round(availD/totalD*100) : 0, color: '#1a1a1a' },
+    { label: 'Assigned', value: assignedD, pct: totalD ? Math.round(assignedD/totalD*100) : 0, color: '#e8d44d' },
+    { label: 'Inactive', value: inactiveD, pct: totalD ? Math.round(inactiveD/totalD*100) : 0, color: '#c8c8c8' },
+  ];
+  const segments = activeTab === 'Drivers' ? driverSegments : vehicleSegments;
 
-  const vehicleSegments = buildSegments([
-    ['Active', activeV, totalV, '#3d3d3d'],
-    ['Maintenance', maintV, totalV, '#f5d94e'],
-    ['Inactive', inactiveV, totalV, '#c4c4c4'],
-  ]);
-  const driverSegments = buildSegments([
-    ['Available', availD, totalD, '#3d3d3d'],
-    ['Assigned', assignedD, totalD, '#f5d94e'],
-    ['Inactive', inactiveD, totalD, '#c4c4c4'],
-  ]);
-  const segments = activeTab === 'drivers' ? driverSegments : vehicleSegments;
+  const styles = {
+    root: {
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100vh',
+      fontFamily: "'DM Sans', 'Helvetica Neue', sans-serif",
+      background: 'linear-gradient(135deg, #b8f55a 0%, #d4f76e 25%, #f0f870 50%, #f5f870 70%, #fafad0 100%)',
+      minHeight: '100vh',
+    },
+    topbar: {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: '10px 20px',
+      background: 'transparent',
+    },
+    logo: {
+      background: '#111',
+      color: '#fff',
+      fontWeight: 700,
+      fontSize: '15px',
+      padding: '7px 18px',
+      borderRadius: '20px',
+      letterSpacing: '-0.3px',
+    },
+    accountBtn: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '6px',
+      background: 'rgba(255,255,255,0.85)',
+      border: '1px solid rgba(0,0,0,0.1)',
+      borderRadius: '20px',
+      padding: '6px 14px',
+      fontSize: '13px',
+      fontWeight: 500,
+      cursor: 'pointer',
+      backdropFilter: 'blur(8px)',
+    },
+    body: {
+      display: 'flex',
+      flex: 1,
+      gap: '12px',
+      padding: '0 14px 14px 14px',
+      overflow: 'hidden',
+    },
+    sidebar: {
+      width: '180px',
+      background: 'rgba(255,255,255,0.75)',
+      borderRadius: '16px',
+      padding: '10px 8px',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '2px',
+      backdropFilter: 'blur(12px)',
+      border: '1px solid rgba(255,255,255,0.9)',
+      flexShrink: 0,
+    },
+    navItem: (active) => ({
+      padding: '10px 14px',
+      borderRadius: '10px',
+      fontSize: '13px',
+      fontWeight: active ? 600 : 400,
+      cursor: 'pointer',
+      background: active ? '#111' : 'transparent',
+      color: active ? '#fff' : '#333',
+      border: 'none',
+      textAlign: 'left',
+      width: '100%',
+      transition: 'all 0.15s ease',
+    }),
+    main: {
+      flex: 1,
+      background: 'rgba(235,240,220,0.55)',
+      borderRadius: '16px',
+      padding: '18px 20px',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '14px',
+      backdropFilter: 'blur(8px)',
+      border: '1px solid rgba(255,255,255,0.7)',
+      overflow: 'auto',
+    },
+    statBar: {
+      background: 'rgba(255,255,255,0.6)',
+      borderRadius: '10px',
+      padding: '10px 14px',
+      border: '1.5px solid rgba(255,255,255,0.9)',
+    },
+    statLabels: {
+      display: 'flex',
+      gap: '16px',
+      marginBottom: '8px',
+    },
+    statLabelItem: {
+      fontSize: '12px',
+      color: '#555',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '4px',
+    },
+    segBar: {
+      display: 'flex',
+      borderRadius: '6px',
+      overflow: 'hidden',
+      height: '10px',
+    },
+    cardsRow: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(3, 1fr)',
+      gap: '14px',
+    },
+    card: {
+      background: 'rgba(255,255,255,0.85)',
+      borderRadius: '14px',
+      padding: '20px',
+      border: '1px solid rgba(255,255,255,0.95)',
+      minHeight: '120px',
+    },
+    cardTitle: {
+      fontSize: '12px',
+      fontWeight: 600,
+      color: '#888',
+      textTransform: 'uppercase',
+      letterSpacing: '0.5px',
+      marginBottom: '8px',
+    },
+    cardNumber: {
+      fontSize: '36px',
+      fontWeight: 700,
+      color: '#111',
+      lineHeight: 1.1,
+    },
+    cardSub: {
+      fontSize: '12px',
+      color: '#888',
+      marginTop: '6px',
+    },
+    tableCard: {
+      background: 'rgba(255,255,255,0.85)',
+      borderRadius: '14px',
+      border: '1px solid rgba(255,255,255,0.95)',
+      overflow: 'hidden',
+    },
+    table: {
+      width: '100%',
+      borderCollapse: 'collapse',
+      fontSize: '13px',
+    },
+    th: {
+      padding: '10px 14px',
+      textAlign: 'left',
+      fontWeight: 600,
+      color: '#888',
+      fontSize: '11px',
+      textTransform: 'uppercase',
+      letterSpacing: '0.4px',
+      borderBottom: '1px solid #eee',
+      background: '#fafafa',
+    },
+    td: {
+      padding: '10px 14px',
+      borderBottom: '1px solid #f0f0f0',
+      color: '#333',
+    },
+    statusBadge: (status) => ({
+      padding: '3px 10px',
+      borderRadius: '20px',
+      fontSize: '11px',
+      fontWeight: 600,
+      background: status === 'active' || status === 'available' ? '#dcfce7' : status === 'maintenance' || status === 'assigned' ? '#fef9c3' : '#f1f5f9',
+      color: status === 'active' || status === 'available' ? '#166534' : status === 'maintenance' || status === 'assigned' ? '#854d0e' : '#64748b',
+    }),
+    actionRow: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    addBtn: {
+      background: '#111',
+      color: '#fff',
+      border: 'none',
+      borderRadius: '8px',
+      padding: '8px 16px',
+      fontSize: '13px',
+      fontWeight: 600,
+      cursor: 'pointer',
+    },
+    searchInput: {
+      border: '1px solid #ddd',
+      borderRadius: '8px',
+      padding: '7px 12px',
+      fontSize: '13px',
+      background: 'rgba(255,255,255,0.8)',
+      outline: 'none',
+      width: '200px',
+    },
+    filterRow: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    chip: {
+      border: '1px solid #ddd',
+      borderRadius: '6px',
+      padding: '5px 10px',
+      fontSize: '12px',
+      background: 'rgba(255,255,255,0.7)',
+      cursor: 'pointer',
+      marginRight: '6px',
+    },
+    pageTitle: {
+      fontSize: '20px',
+      fontWeight: 700,
+      color: '#111',
+      margin: 0,
+    },
+  };
+
+  const isDashboard = activeTab === 'Dashboard';
+  const isVehicles = activeTab === 'Vehicle Registry';
+  const isDrivers = activeTab === 'Drivers';
 
   return (
-    <div className="crextio-layout">
-      {/* ====== TOP NAVBAR ====== */}
-      <header className="top-navbar">
-        <div className="nav-logo">🚛 Fleet</div>
-        <nav className="nav-tabs">
-          {NAV_TABS.map((tab) => {
-            const key = tab.toLowerCase();
-            return (
-              <button
-                key={tab}
-                className={`nav-tab ${key === activeTab ? 'active' : ''}`}
-                onClick={() => setActiveTab(key)}
-              >
-                {tab}
-              </button>
-            );
-          })}
-        </nav>
-        <div className="nav-right">
-          <button className="icon-btn">🔔</button>
-          <div className="avatar-sm">F</div>
-        </div>
+    <div style={styles.root}>
+      {/* Top Bar */}
+      <header style={styles.topbar}>
+        <div style={styles.logo}>FleeFo</div>
+        <button style={styles.accountBtn}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+          Account
+        </button>
       </header>
 
-      {/* ====== PAGE CONTENT ====== */}
-      <main className="page-body">
-        <h1 className="page-title">
-          {activeTab === 'vehicles' ? 'Vehicles' : activeTab === 'drivers' ? 'Drivers' : 'Dashboard'}
-        </h1>
-
-        {/* ---- Stat Labels ---- */}
-        <div className="stat-labels">
-          {segments.map((s) => (
-            <span key={s.label} className="stat-label-item">
-              {s.label} <span className="stat-label-pct">{s.pct}%</span>
-            </span>
-          ))}
-        </div>
-
-        {/* ---- Segmented Stat Bar ---- */}
-        <div className="segmented-bar">
-          {segments.map((s) => (
-            <div
-              key={s.label}
-              className="seg"
-              style={{ width: `${s.pct || 1}%`, backgroundColor: s.color }}
+      {/* Body */}
+      <div style={styles.body}>
+        {/* Sidebar */}
+        <aside style={styles.sidebar}>
+          {NAV_ITEMS.map(item => (
+            <button
+              key={item}
+              style={styles.navItem(activeTab === item)}
+              onClick={() => setActiveTab(item)}
             >
-              {s.pct >= 10 && <span className="seg-text">{s.pct}%</span>}
-            </div>
+              {item}
+            </button>
           ))}
-        </div>
+        </aside>
 
-        {/* ---- Action Row ---- */}
-        {activeTab !== 'dashboard' && (
-          <div className="action-row">
-            <div className="action-row-right">
-              <button className="action-btn primary">
-                + Add {activeTab === 'vehicles' ? 'Vehicle' : 'Driver'}
-              </button>
+        {/* Main content */}
+        <main style={styles.main}>
+          <h1 style={styles.pageTitle}>{activeTab}</h1>
+
+          {/* Stat bar */}
+          <div style={styles.statBar}>
+            <div style={styles.statLabels}>
+              {segments.map(s => (
+                <span key={s.label} style={styles.statLabelItem}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: s.color, display: 'inline-block' }}></span>
+                  {s.label} <strong>{s.pct}%</strong>
+                </span>
+              ))}
+            </div>
+            <div style={styles.segBar}>
+              {segments.map(s => (
+                <div key={s.label} style={{ width: `${s.pct || 1}%`, background: s.color, transition: 'width 0.4s ease' }} />
+              ))}
             </div>
           </div>
-        )}
 
-        {/* ---- Filter Row ---- */}
-        {activeTab !== 'dashboard' && (
-          <div className="filter-row">
-            <div className="filter-chips">
-              <span className="filter-chip">Columns ▾</span>
-              <span className="filter-chip">Status ▾</span>
-            </div>
-            <div className="filter-right">
-              <input
-                className="search-input"
-                type="text"
-                placeholder="Search"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-              <button className="export-btn">↗ Export</button>
-            </div>
-          </div>
-        )}
-
-        {/* ---- Dashboard Summary View ---- */}
-        {activeTab === 'dashboard' && (
-          <div className="dashboard-summary">
-            <div className="summary-card">
-              <h3>Vehicles</h3>
-              <div className="summary-number">{totalV}</div>
-              <div className="summary-breakdown">
-                <span className="sb-item"><span className="sb-dot" style={{ background: '#3d3d3d' }}></span> Active: {activeV}</span>
-                <span className="sb-item"><span className="sb-dot" style={{ background: '#f5d94e' }}></span> Maintenance: {maintV}</span>
-                <span className="sb-item"><span className="sb-dot" style={{ background: '#c4c4c4' }}></span> Inactive: {inactiveV}</span>
+          {/* Dashboard: 3 summary cards */}
+          {isDashboard && (
+            <div style={styles.cardsRow}>
+              <div style={styles.card}>
+                <div style={styles.cardTitle}>Total Vehicles</div>
+                <div style={styles.cardNumber}>{totalV}</div>
+                <div style={styles.cardSub}>Active: {activeV} · Maintenance: {maintV}</div>
+              </div>
+              <div style={styles.card}>
+                <div style={styles.cardTitle}>Total Drivers</div>
+                <div style={styles.cardNumber}>{totalD}</div>
+                <div style={styles.cardSub}>Available: {availD} · Assigned: {assignedD}</div>
+              </div>
+              <div style={styles.card}>
+                <div style={styles.cardTitle}>Fleet Utilization</div>
+                <div style={styles.cardNumber}>{totalV ? Math.round(activeV/totalV*100) : 0}%</div>
+                <div style={styles.cardSub}>Active vehicles in operation</div>
               </div>
             </div>
-            <div className="summary-card">
-              <h3>Drivers</h3>
-              <div className="summary-number">{totalD}</div>
-              <div className="summary-breakdown">
-                <span className="sb-item"><span className="sb-dot" style={{ background: '#3d3d3d' }}></span> Available: {availD}</span>
-                <span className="sb-item"><span className="sb-dot" style={{ background: '#f5d94e' }}></span> Assigned: {assignedD}</span>
-                <span className="sb-item"><span className="sb-dot" style={{ background: '#c4c4c4' }}></span> Inactive: {inactiveD}</span>
-              </div>
-            </div>
-          </div>
-        )}
+          )}
 
-        {/* ---- Data Table ---- */}
-        {activeTab !== 'dashboard' && (
-          <div className="table-card">
-            {loading ? (
-              <div className="loading-text">Loading…</div>
-            ) : activeTab === 'vehicles' ? (
-              <VehicleTable
-                vehicles={filteredVehicles}
-                selectedRows={selectedRows}
-                onToggleRow={toggleRow}
-              />
-            ) : (
-              <DriverTable
-                drivers={filteredDrivers}
-                selectedRows={selectedRows}
-                onToggleRow={toggleRow}
-              />
-            )}
-          </div>
-        )}
-      </main>
+          {/* Tables for non-dashboard tabs */}
+          {!isDashboard && (
+            <>
+              <div style={styles.actionRow}>
+                <div></div>
+                <button style={styles.addBtn}>+ Add {activeTab === 'Vehicle Registry' ? 'Vehicle' : 'Item'}</button>
+              </div>
+              <div style={styles.filterRow}>
+                <div>
+                  <span style={styles.chip}>Columns ▾</span>
+                  <span style={styles.chip}>Status ▾</span>
+                </div>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <input
+                    style={styles.searchInput}
+                    type="text"
+                    placeholder="Search..."
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                  />
+                  <button style={{ ...styles.chip, margin: 0 }}>↗ Export</button>
+                </div>
+              </div>
+              <div style={styles.tableCard}>
+                {isVehicles && (
+                  <table style={styles.table}>
+                    <thead>
+                      <tr>
+                        <th style={styles.th}><input type="checkbox" /></th>
+                        <th style={styles.th}>Vehicle #</th>
+                        <th style={styles.th}>Make</th>
+                        <th style={styles.th}>Model</th>
+                        <th style={styles.th}>Plate</th>
+                        <th style={styles.th}>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredVehicles.map(v => (
+                        <tr key={v.id} style={{ background: selectedRows.includes(v.id) ? '#fafff0' : 'transparent' }}>
+                          <td style={styles.td}><input type="checkbox" checked={selectedRows.includes(v.id)} onChange={() => toggleRow(v.id)} /></td>
+                          <td style={styles.td}>{v.vehicle_number}</td>
+                          <td style={styles.td}>{v.make}</td>
+                          <td style={styles.td}>{v.model}</td>
+                          <td style={styles.td}>{v.license_plate}</td>
+                          <td style={styles.td}><span style={styles.statusBadge(v.status)}>{v.status}</span></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+                {!isVehicles && (
+                  <div style={{ padding: '40px', textAlign: 'center', color: '#aaa', fontSize: '14px' }}>
+                    {activeTab} — coming soon
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </main>
+      </div>
     </div>
   );
-};
-
-export default Dashboard;
+}

@@ -76,6 +76,14 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
+  // Expose logout to window for testing/debugging
+  useEffect(() => {
+    window.logout = logout;
+    return () => {
+      delete window.logout;
+    };
+  }, []);
+
   const value = {
     user,
     login,

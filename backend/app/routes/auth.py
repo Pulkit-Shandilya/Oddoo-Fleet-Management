@@ -48,20 +48,20 @@ def login():
     data = request.get_json()
     
     if not data or not data.get('username') or not data.get('password'):
-        return jsonify({'message': 'Missing username or password'}), 400
+        return jsonify({'message': 'Missing user or password'}), 400
     
     # Find user
     user = User.query.filter_by(username=data['username']).first()
     
     if not user or not user.check_password(data['password']):
-        return jsonify({'message': 'Invalid username or password'}), 401
+        return jsonify({'message': 'Invalid user or password'}), 401
     
     # Create tokens
-    access_token = create_access_token(identity=user.id)
-    refresh_token = create_refresh_token(identity=user.id)
+    access_token = create_access_token(identity=str(user.id))
+    refresh_token = create_refresh_token(identity=str(user.id))
     
     return jsonify({
-        'message': 'Login successful',
+        'message': 'Login Done ✅',
         'access_token': access_token,
         'refresh_token': refresh_token,
         'user': user.to_dict()
@@ -71,14 +71,14 @@ def login():
 @jwt_required(refresh=True)
 def refresh():
     current_user_id = get_jwt_identity()
-    access_token = create_access_token(identity=current_user_id)
+    access_token = create_access_token(identity=str(current_user_id))
     return jsonify({'access_token': access_token}), 200
 
 @auth_bp.route('/me', methods=['GET'])
 @jwt_required()
 def get_current_user():
     current_user_id = get_jwt_identity()
-    user = User.query.get(current_user_id)
+    user = User.query.get(int(current_user_id))
     
     if not user:
         return jsonify({'message': 'User not found'}), 404

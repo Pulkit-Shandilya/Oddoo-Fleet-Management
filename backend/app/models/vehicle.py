@@ -4,35 +4,24 @@ from app import db
 class Vehicle(db.Model):
     __tablename__ = 'vehicles'
     
-    id = db.Column(db.Integer, primary_key=True)
-    vehicle_number = db.Column(db.String(50), unique=True, nullable=False)
-    make = db.Column(db.String(50), nullable=False)
-    model = db.Column(db.String(50), nullable=False)
-    year = db.Column(db.Integer)
-    vin = db.Column(db.String(17), unique=True)
-    license_plate = db.Column(db.String(20), unique=True)
-    status = db.Column(db.String(20), default='active')  # active, maintenance, inactive
+    vehicle_number = db.Column(db.String(50), primary_key=True, nullable=False)
+    holding_capacity = db.Column(db.Integer)  # passengers or cargo capacity
     mileage = db.Column(db.Integer, default=0)
-    fuel_type = db.Column(db.String(20))  # diesel, petrol, electric, hybrid
+    status = db.Column(db.String(20), default='active')  # active, maintenance, inactive
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
-    driver_id = db.Column(db.Integer, db.ForeignKey('drivers.id'), nullable=True)
+    driver_license = db.Column(db.String(50), db.ForeignKey('drivers.license_number'), nullable=True)
     
     def to_dict(self):
         return {
-            'id': self.id,
+            'id': self.vehicle_number,
             'vehicle_number': self.vehicle_number,
-            'make': self.make,
-            'model': self.model,
-            'year': self.year,
-            'vin': self.vin,
-            'license_plate': self.license_plate,
-            'status': self.status,
+            'holding_capacity': self.holding_capacity,
             'mileage': self.mileage,
-            'fuel_type': self.fuel_type,
-            'driver_id': self.driver_id,
+            'status': self.status,
+            'driver_license': self.driver_license,
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat()
         }

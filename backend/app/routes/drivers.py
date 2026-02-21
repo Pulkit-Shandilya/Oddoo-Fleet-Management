@@ -12,10 +12,10 @@ def get_drivers():
     drivers = Driver.query.all()
     return jsonify({'drivers': [driver.to_dict() for driver in drivers]}), 200
 
-@drivers_bp.route('/<int:driver_id>', methods=['GET'])
+@drivers_bp.route('/<string:license_number>', methods=['GET'])
 @jwt_required()
-def get_driver(driver_id):
-    driver = Driver.query.get(driver_id)
+def get_driver(license_number):
+    driver = Driver.query.get(license_number)
     
     if not driver:
         return jsonify({'message': 'Driver not found'}), 404
@@ -68,9 +68,9 @@ def create_driver():
         'driver': driver.to_dict()
     }), 201
 
-@drivers_bp.route('/<int:driver_id>', methods=['PUT'])
+@drivers_bp.route('/<string:license_number>', methods=['PUT'])
 @jwt_required()
-def update_driver(driver_id):
+def update_driver(license_number):
     current_user_id = get_jwt_identity()
     user = User.query.get(current_user_id)
     
@@ -78,7 +78,7 @@ def update_driver(driver_id):
     if user.role not in ['admin', 'manager']:
         return jsonify({'message': 'Unauthorized'}), 403
     
-    driver = Driver.query.get(driver_id)
+    driver = Driver.query.get(license_number)
     
     if not driver:
         return jsonify({'message': 'Driver not found'}), 404
@@ -109,9 +109,9 @@ def update_driver(driver_id):
         'driver': driver.to_dict()
     }), 200
 
-@drivers_bp.route('/<int:driver_id>', methods=['DELETE'])
+@drivers_bp.route('/<string:license_number>', methods=['DELETE'])
 @jwt_required()
-def delete_driver(driver_id):
+def delete_driver(license_number):
     current_user_id = get_jwt_identity()
     user = User.query.get(current_user_id)
     
@@ -119,7 +119,7 @@ def delete_driver(driver_id):
     if user.role != 'admin':
         return jsonify({'message': 'Unauthorized'}), 403
     
-    driver = Driver.query.get(driver_id)
+    driver = Driver.query.get(license_number)
     
     if not driver:
         return jsonify({'message': 'Driver not found'}), 404

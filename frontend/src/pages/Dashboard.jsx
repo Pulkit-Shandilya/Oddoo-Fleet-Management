@@ -895,6 +895,11 @@ export default function Dashboard() {
               </div>
               <div style={styles.tableCard}>
                 {isVehicles && (
+                  loadingVehicles ? (
+                    <div style={{ padding: '40px', textAlign: 'center', color: '#aaa', fontSize: '14px' }}>
+                      Loading vehicles…
+                    </div>
+                  ) : (
                   <table style={styles.table}>
                     <thead>
                       <tr>

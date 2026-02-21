@@ -5,7 +5,7 @@ import './Dashboard.css';
 const Dashboard = () => {
   const [vehicles, setVehicles] = useState([]);
   const [drivers, setDrivers] = useState([]);
-  const [activeTab, setActiveTab] = useState('vehicles');
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRows, setSelectedRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -58,20 +58,20 @@ const Dashboard = () => {
     );
   };
 
-  const navTabs = ['Dashboard', 'Vehicles', 'Drivers', 'Devices', 'Apps', 'Salary', 'Calendar', 'Reviews', 'Settings'];
+  const navTabs = ['Dashboard', 'Vehicles', 'Drivers'];
 
   // Stat segments for the colored bar
-  const segments = activeTab === 'vehicles'
-    ? [
-        { label: 'Active', value: activeV, pct: totalV ? Math.round((activeV / totalV) * 100) : 0, color: '#3d3d3d' },
-        { label: 'Maintenance', value: maintV, pct: totalV ? Math.round((maintV / totalV) * 100) : 0, color: '#f5d94e' },
-        { label: 'Inactive', value: inactiveV, pct: totalV ? Math.round((inactiveV / totalV) * 100) : 0, color: '#c4c4c4' },
-      ]
-    : [
-        { label: 'Available', value: availD, pct: totalD ? Math.round((availD / totalD) * 100) : 0, color: '#3d3d3d' },
-        { label: 'Assigned', value: assignedD, pct: totalD ? Math.round((assignedD / totalD) * 100) : 0, color: '#f5d94e' },
-        { label: 'Inactive', value: inactiveD, pct: totalD ? Math.round((inactiveD / totalD) * 100) : 0, color: '#c4c4c4' },
-      ];
+  const vehicleSegments = [
+    { label: 'Active', value: activeV, pct: totalV ? Math.round((activeV / totalV) * 100) : 0, color: '#3d3d3d' },
+    { label: 'Maintenance', value: maintV, pct: totalV ? Math.round((maintV / totalV) * 100) : 0, color: '#f5d94e' },
+    { label: 'Inactive', value: inactiveV, pct: totalV ? Math.round((inactiveV / totalV) * 100) : 0, color: '#c4c4c4' },
+  ];
+  const driverSegments = [
+    { label: 'Available', value: availD, pct: totalD ? Math.round((availD / totalD) * 100) : 0, color: '#3d3d3d' },
+    { label: 'Assigned', value: assignedD, pct: totalD ? Math.round((assignedD / totalD) * 100) : 0, color: '#f5d94e' },
+    { label: 'Inactive', value: inactiveD, pct: totalD ? Math.round((inactiveD / totalD) * 100) : 0, color: '#c4c4c4' },
+  ];
+  const segments = activeTab === 'drivers' ? driverSegments : vehicleSegments;
 
   return (
     <div className="crextio-layout">
@@ -81,14 +81,11 @@ const Dashboard = () => {
         <nav className="nav-tabs">
           {navTabs.map((tab) => {
             const key = tab.toLowerCase();
-            const isActive = key === activeTab || (key === 'vehicles' && activeTab === 'vehicles') || (key === 'drivers' && activeTab === 'drivers');
             return (
               <button
                 key={tab}
-                className={`nav-tab ${isActive ? 'active' : ''}`}
-                onClick={() => {
-                  if (key === 'vehicles' || key === 'drivers') setActiveTab(key);
-                }}
+                className={`nav-tab ${key === activeTab ? 'active' : ''}`}
+                onClick={() => setActiveTab(key)}
               >
                 {tab}
               </button>
@@ -104,7 +101,9 @@ const Dashboard = () => {
       {/* ====== PAGE CONTENT ====== */}
       <main className="page-body">
         {/* Page Title */}
-        <h1 className="page-title">{activeTab === 'vehicles' ? 'Vehicles' : 'Drivers'}</h1>
+        <h1 className="page-title">
+          {activeTab === 'vehicles' ? 'Vehicles' : activeTab === 'drivers' ? 'Drivers' : 'Dashboard'}
+        </h1>
 
         {/* ---- Stat Labels ---- */}
         <div className="stat-labels">
@@ -128,49 +127,63 @@ const Dashboard = () => {
           ))}
         </div>
 
-        {/* ---- Action Row (Directory, Org Chart, Insights) ---- */}
-        <div className="action-row">
-          <div className="action-row-right">
-            <button className="action-btn">Directory ▾</button>
-            <button className="action-btn">Org Chart ▾</button>
-            <button className="action-btn">Insights ▾</button>
+        {/* ---- Action Row ---- */}
+        {activeTab !== 'dashboard' && (
+          <div className="action-row">
+            <div className="action-row-right">
+              <button className="action-btn primary">
+                + Add {activeTab === 'vehicles' ? 'Vehicle' : 'Driver'}
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* ---- Filter Row ---- */}
-        <div className="filter-row">
-          <div className="filter-chips">
-            <span className="filter-chip">Columns ▾</span>
-            {activeTab === 'vehicles' ? (
-              <>
-                <span className="filter-chip">Make ▾</span>
-                <span className="filter-chip">Status ▾</span>
-                <span className="filter-chip">Fuel Type ▾</span>
-                <span className="filter-chip">Year ▾</span>
-              </>
-            ) : (
-              <>
-                <span className="filter-chip">Status ▾</span>
-                <span className="filter-chip">License ▾</span>
-              </>
-            )}
+        {activeTab !== 'dashboard' && (
+          <div className="filter-row">
+            <div className="filter-chips">
+              <span className="filter-chip">Columns ▾</span>
+              <span className="filter-chip">Status ▾</span>
+            </div>
+            <div className="filter-right">
+              <input
+                className="search-input"
+                type="text"
+                placeholder="Search"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+              <button className="export-btn">↗ Export</button>
+            </div>
           </div>
-          <div className="filter-right">
-            <input
-              className="search-input"
-              type="text"
-              placeholder="Search"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-            <button className="icon-btn-sm">＋</button>
-            <button className="icon-btn-sm">☰</button>
-            <button className="export-btn">↗ Export</button>
+        )}
+
+        {/* ---- Dashboard Summary View ---- */}
+        {activeTab === 'dashboard' && (
+          <div className="dashboard-summary">
+            <div className="summary-card">
+              <h3>Vehicles</h3>
+              <div className="summary-number">{totalV}</div>
+              <div className="summary-breakdown">
+                <span className="sb-item"><span className="sb-dot" style={{background:'#3d3d3d'}}></span> Active: {activeV}</span>
+                <span className="sb-item"><span className="sb-dot" style={{background:'#f5d94e'}}></span> Maintenance: {maintV}</span>
+                <span className="sb-item"><span className="sb-dot" style={{background:'#c4c4c4'}}></span> Inactive: {inactiveV}</span>
+              </div>
+            </div>
+            <div className="summary-card">
+              <h3>Drivers</h3>
+              <div className="summary-number">{totalD}</div>
+              <div className="summary-breakdown">
+                <span className="sb-item"><span className="sb-dot" style={{background:'#3d3d3d'}}></span> Available: {availD}</span>
+                <span className="sb-item"><span className="sb-dot" style={{background:'#f5d94e'}}></span> Assigned: {assignedD}</span>
+                <span className="sb-item"><span className="sb-dot" style={{background:'#c4c4c4'}}></span> Inactive: {inactiveD}</span>
+              </div>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* ---- Data Table ---- */}
-        <div className="table-card">
+        {activeTab !== 'dashboard' && <div className="table-card">
           {loading ? (
             <div className="loading-text">Loading…</div>
           ) : activeTab === 'vehicles' ? (
@@ -276,7 +289,7 @@ const Dashboard = () => {
               </tbody>
             </table>
           )}
-        </div>
+        </div>}
       </main>
     </div>
   );

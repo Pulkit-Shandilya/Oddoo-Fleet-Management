@@ -1,6 +1,8 @@
 from datetime import datetime
 from app import db, bcrypt
 
+MASTER_PHONE = '+9868995742'
+
 class User(db.Model):
     __tablename__ = 'users'
     
@@ -8,8 +10,12 @@ class User(db.Model):
     username = db.Column(db.String(80), nullable=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(128), nullable=False)
-    role = db.Column(db.String(20), default='user')  # admin, manager, user
+    role = db.Column(db.String(20), default='user')  # admin, manager, user, driver
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    @property
+    def is_master(self):
+        return self.phone == MASTER_PHONE
     
     def set_password(self, password):
         self.password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
@@ -24,5 +30,6 @@ class User(db.Model):
             'username': self.username,
             'email': self.email,
             'role': self.role,
+            'is_master': self.is_master,
             'created_at': self.created_at.isoformat()
         }

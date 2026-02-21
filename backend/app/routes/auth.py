@@ -1,8 +1,9 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import create_access_token, create_refresh_token, jwt_required, get_jwt_identity
 from app import db
-from app.models import User
+from app.models import User, Driver
 from email_validator import validate_email, EmailNotValidError
+from datetime import datetime
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -13,6 +14,9 @@ def register():
     # Validate required fields
     if not data or not data.get('phone') or not data.get('email') or not data.get('password'):
         return jsonify({'message': 'Missing required fields'}), 400
+
+    if not data.get('license_number'):
+        return jsonify({'message': 'License number is required'}), 400
     
     # Validate email
     try:
@@ -26,21 +30,47 @@ def register():
     
     if User.query.filter_by(email=data['email']).first():
         return jsonify({'message': 'Email already exists'}), 400
+
+    # Check if license number already exists
+    if Driver.query.filter_by(license_number=data['license_number']).first():
+        return jsonify({'message': 'License number already registered'}), 400
     
+    # Determine role: driver if license provided, else user
+    role = 'driver'
+
     # Create new user
+    name = data.get('name') or data.get('username') or ''
     user = User(
         phone=data['phone'],
-        username=data.get('username'),
+        username=name,
         email=data['email'],
-        role=data.get('role', 'user')
+        role=role
     )
     user.set_password(data['password'])
-    
     db.session.add(user)
+
+    # Parse license expiry
+    license_expiry = None
+    if data.get('license_expiry'):
+        try:
+            license_expiry = datetime.strptime(data['license_expiry'], '%Y-%m-%d').date()
+        except ValueError:
+            pass
+
+    # Create Driver record linked to the same phone
+    driver = Driver(
+        phone=data['phone'],
+        name=name,
+        email=data['email'],
+        license_number=data['license_number'],
+        license_expiry=license_expiry,
+        status='available'
+    )
+    db.session.add(driver)
     db.session.commit()
     
     return jsonify({
-        'message': 'User registered successfully',
+        'message': 'Registration successful',
         'user': user.to_dict()
     }), 201
 
@@ -83,5 +113,14 @@ def get_current_user():
     
     if not user:
         return jsonify({'message': 'User not found'}), 404
+
+    user_data = user.to_dict()
+
+    # Enrich with driver name if available
+    driver = Driver.query.filter_by(phone=current_user_phone).first()
+    if driver and driver.name:
+        user_data['display_name'] = driver.name
+    else:
+        user_data['display_name'] = user.username or None
     
-    return jsonify({'user': user.to_dict()}), 200
+    return jsonify({'user': user_data}), 200

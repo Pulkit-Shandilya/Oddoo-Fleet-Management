@@ -9,7 +9,10 @@ const Login = () => {
     name: '',
     phone: '',
     email: '',
+    license_number: '',
+    license_expiry: '',
     password: '',
+    confirmPassword: '',
   });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -42,6 +45,11 @@ const Login = () => {
           setError(result.message);
         }
       } else {
+        if (formData.password !== formData.confirmPassword) {
+          setError('Passwords do not match');
+          setIsSubmitting(false);
+          return;
+        }
         const registerResult = await register(formData);
         if (registerResult.success) {
           setSuccess('Registration successful! Logging you in...');
@@ -82,57 +90,111 @@ const Login = () => {
           {success && <div className="success-message">{success}</div>}
 
           <form onSubmit={handleSubmit}>
-            {!isLogin && (
-              <div className="form-group">
-                <label>Name</label>
-                <input
-                  type="text"
-                  name="name"
-                  placeholder="John Doe"
-                  value={formData.name}
-                  onChange={handleChange}
-                  required
-                />
+            {isLogin ? (
+              <>
+                <div className="form-group">
+                  <label>Phone Number</label>
+                  <input
+                    type="tel"
+                    name="phone"
+                    placeholder="+1 234 567 8900"
+                    value={formData.phone}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Password</label>
+                  <input
+                    type="password"
+                    name="password"
+                    placeholder="••••••••"
+                    value={formData.password}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+              </>
+            ) : (
+              <div className="register-grid">
+                <div className="form-group">
+                  <label>Name</label>
+                  <input
+                    type="text"
+                    name="name"
+                    placeholder="John Doe"
+                    value={formData.name}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Phone Number</label>
+                  <input
+                    type="tel"
+                    name="phone"
+                    placeholder="+1 234 567 8900"
+                    value={formData.phone}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+                <div className="form-group full-width">
+                  <label>Email</label>
+                  <input
+                    type="email"
+                    name="email"
+                    placeholder="name@company.com"
+                    value={formData.email}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>License Number</label>
+                  <input
+                    type="text"
+                    name="license_number"
+                    placeholder="DL-XXXXX"
+                    value={formData.license_number}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>License Expiry</label>
+                  <input
+                    type="date"
+                    name="license_expiry"
+                    value={formData.license_expiry}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Password</label>
+                  <input
+                    type="password"
+                    name="password"
+                    placeholder="••••••••"
+                    value={formData.password}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Repeat Password</label>
+                  <input
+                    type="password"
+                    name="confirmPassword"
+                    placeholder="••••••••"
+                    value={formData.confirmPassword}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
               </div>
             )}
-
-            <div className="form-group">
-              <label>Phone Number</label>
-              <input
-                type="tel"
-                name="phone"
-                placeholder="+1 234 567 8900"
-                value={formData.phone}
-                onChange={handleChange}
-                required
-              />
-            </div>
-
-            {!isLogin && (
-              <div className="form-group">
-                <label>Email</label>
-                <input
-                  type="email"
-                  name="email"
-                  placeholder="name@company.com"
-                  value={formData.email}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-            )}
-
-            <div className="form-group">
-              <label>Password</label>
-              <input
-                type="password"
-                name="password"
-                placeholder="••••••••"
-                value={formData.password}
-                onChange={handleChange}
-                required
-              />
-            </div>
 
             <button type="submit" className="btn-primary" disabled={isSubmitting}>
               {isSubmitting ? 'Please wait...' : isLogin ? 'Login Now' : 'Register Now'}

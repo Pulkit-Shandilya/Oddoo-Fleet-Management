@@ -52,4 +52,11 @@ export const driverService = {
   delete: (id) => api.delete(`/drivers/${id}`),
 };
 
+// User services
+export const userService = {
+  getAll: () => api.get('/users/'),
+  updateRole: (phone, role) => api.put(`/users/${phone}/role`, { role }),
+  delete: (phone) => api.delete(`/users/${phone}`),
+};
+
 export default api;

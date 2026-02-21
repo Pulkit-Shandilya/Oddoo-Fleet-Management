@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { vehicleService, driverService } from '../services/api';
+import { vehicleService, driverService, userService } from '../services/api';
 import './Dashboard.css';
 
-const NAV_ITEMS = ['Dashboard', 'Vehicle Registry', 'Trip Dispatcher', 'Maintenance', 'Trip & Expense', 'Performance', 'Analytics'];
+const NAV_ITEMS = ['Dashboard', 'Vehicle Registry', 'Trip Dispatcher', 'Maintenance', 'Trip & Expense', 'Performance', 'Analytics', 'User Management'];
 
 const mockVehicles = [
   { id: 1, vehicle_number: 'V001', make: 'Ford', model: 'Transit', license_plate: 'ABC123', status: 'active' },
@@ -26,6 +26,9 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [vehicles] = useState(mockVehicles);
   const [drivers] = useState(mockDrivers);
+  const [users, setUsers] = useState([]);
+  const [masterPhone, setMasterPhone] = useState('');
+  const [loadingUsers, setLoadingUsers] = useState(false);
   const [activeTab, setActiveTab] = useState('Dashboard');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRows, setSelectedRows] = useState([]);
@@ -39,7 +42,11 @@ export default function Dashboard() {
   const [driverForm, setDriverForm] = useState({ name: '', phone: '', email: '', license_number: '', license_expiry: '', status: 'available' });
   const [tripForm, setTripForm] = useState({ vehicle_number: '', driver_phone: '', origin: '', destination: '', date: '', distance: '' });
   const [maintenanceForm, setMaintenanceForm] = useState({ vehicle_number: '', type: '', description: '', date: '', cost: '' });
-  const [expenseForm, setExpenseForm] = useState({ vehicle_number: '', category: '', amount: '', date: '', notes: '' });
+  const [maintenanceRecords, setMaintenanceRecords] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('maintenanceRecords')) || []; }
+    catch { return []; }
+  });
+  const [expenseForm, setExpenseForm] = useState({ vehicle_number: '', category: '', amount: '', date: '', notes: '', distance: '', mileage: '' });
 
   const openModal = (type) => { setModalError(''); setModalOpen(type); };
   const closeModal = () => { setModalOpen(null); setModalError(''); setModalLoading(false); };
@@ -90,15 +97,80 @@ export default function Dashboard() {
 
   const handleMaintenanceSubmit = async (e) => {
     e.preventDefault();
+    const newRecord = {
+      id: Date.now(),
+      ...maintenanceForm,
+      date: maintenanceForm.date || new Date().toISOString().split('T')[0],
+    };
+    setMaintenanceRecords(prev => {
+      const updated = [newRecord, ...prev];
+      localStorage.setItem('maintenanceRecords', JSON.stringify(updated));
+      return updated;
+    });
     setMaintenanceForm({ vehicle_number: '', type: '', description: '', date: '', cost: '' });
     closeModal();
   };
 
+  const removeMaintenanceRecord = (id) => {
+    setMaintenanceRecords(prev => {
+      const updated = prev.filter(r => r.id !== id);
+      localStorage.setItem('maintenanceRecords', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   const handleExpenseSubmit = async (e) => {
     e.preventDefault();
-    setExpenseForm({ vehicle_number: '', category: '', amount: '', date: '', notes: '' });
+    setExpenseForm({ vehicle_number: '', category: '', amount: '', date: '', notes: '', distance: '', mileage: '' });
     closeModal();
   };
+
+  // Fetch users when User Management tab is active
+  const fetchUsers = async () => {
+    setLoadingUsers(true);
+    try {
+      const response = await userService.getAll();
+      setUsers(response.data.users);
+      setMasterPhone(response.data.master_phone);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'User Management') {
+      fetchUsers();
+    }
+  }, [activeTab]);
+
+  // Toggle user role between admin and user
+  const handleToggleRole = async (userPhone, currentRole) => {
+    try {
+      const newRole = currentRole === 'admin' ? 'user' : 'admin';
+      await userService.updateRole(userPhone, newRole);
+      fetchUsers(); // Refresh the list
+    } catch (error) {
+      console.error('Error updating role:', error);
+      alert(error.response?.data?.message || 'Failed to update user role');
+    }
+  };
+
+  // Calculate trip cost based on distance and mileage
+  const calculateTripCost = (distance, mileage, fuelPrice = 3.5) => {
+    if (!distance || !mileage || mileage <= 0) return 0;
+    const fuelNeeded = parseFloat(distance) / parseFloat(mileage);
+    return (fuelNeeded * fuelPrice).toFixed(2);
+  };
+
+  // Auto-calculate expense amount when distance or mileage changes
+  useEffect(() => {
+    if (expenseForm.distance && expenseForm.mileage && expenseForm.category === 'fuel') {
+      const calculatedCost = calculateTripCost(expenseForm.distance, expenseForm.mileage);
+      setExpenseForm(prev => ({ ...prev, amount: calculatedCost }));
+    }
+  }, [expenseForm.distance, expenseForm.mileage, expenseForm.category]);
 
   const { totalV, activeV, maintV, inactiveV } = useMemo(() => {
     const total = vehicles.length;
@@ -121,6 +193,10 @@ export default function Dashboard() {
   const filteredDrivers = useMemo(() =>
     drivers.filter(d => [d.name, d.email, d.license_number, d.status].join(' ').toLowerCase().includes(searchTerm.toLowerCase())),
     [drivers, searchTerm]);
+
+  const filteredUsers = useMemo(() =>
+    users.filter(u => [u.username, u.phone, u.email, u.role].join(' ').toLowerCase().includes(searchTerm.toLowerCase())),
+    [users, searchTerm]);
 
   const toggleRow = useCallback(pk => {
     setSelectedRows(prev => prev.includes(pk) ? prev.filter(r => r !== pk) : [...prev, pk]);
@@ -456,6 +532,7 @@ export default function Dashboard() {
   const isDashboard = activeTab === 'Dashboard';
   const isVehicles = activeTab === 'Vehicle Registry';
   const isDrivers = activeTab === 'Drivers';
+  const isUsers = activeTab === 'User Management';
 
   return (
     <div style={styles.root}>
@@ -467,12 +544,9 @@ export default function Dashboard() {
         <div style={styles.profilePopup}>
           <button style={styles.closeBtn} onClick={() => setShowProfile(false)}>×</button>
           <div style={styles.profileHeader}>
-            <div style={styles.profileAvatar}>
-              {user?.username?.charAt(0)?.toUpperCase() || user?.phone?.charAt(0) || 'U'}
-            </div>
             <div style={styles.profileInfo}>
               <div style={styles.profileName}>
-                {user?.username || 'User'}
+                {user?.display_name || user?.username || 'Account'}
               </div>
               <div style={styles.profileRole}>{user?.role || 'user'}</div>
             </div>
@@ -507,8 +581,7 @@ export default function Dashboard() {
       <header style={styles.topbar}>
         <div style={styles.logo}>FleeFo</div>
         <button style={styles.accountBtn} onClick={() => setShowProfile(!showProfile)}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
-          Account
+          {user?.display_name || user?.username || 'Account'}
         </button>
       </header>
 
@@ -516,15 +589,21 @@ export default function Dashboard() {
       <div style={styles.body}>
         {/* Sidebar */}
         <aside style={styles.sidebar}>
-          {NAV_ITEMS.map(item => (
-            <button
-              key={item}
-              style={styles.navItem(activeTab === item)}
-              onClick={() => setActiveTab(item)}
-            >
-              {item}
-            </button>
-          ))}
+          {NAV_ITEMS.map(item => {
+            // Hide User Management from drivers
+            if (item === 'User Management' && user?.role === 'driver') {
+              return null;
+            }
+            return (
+              <button
+                key={item}
+                style={styles.navItem(activeTab === item)}
+                onClick={() => setActiveTab(item)}
+              >
+                {item}
+              </button>
+            );
+          })}
         </aside>
 
         {/* Main content */}
@@ -574,13 +653,22 @@ export default function Dashboard() {
             <>
               <div style={styles.actionRow}>
                 <div></div>
-                <button style={styles.addBtn} onClick={() => {
-                  if (activeTab === 'Vehicle Registry') openModal('vehicle');
-                  else if (activeTab === 'Trip Dispatcher') openModal('trip');
-                  else if (activeTab === 'Maintenance') openModal('maintenance');
-                  else if (activeTab === 'Trip & Expense') openModal('expense');
-                  else openModal('driver');
-                }}>+ Add {activeTab === 'Vehicle Registry' ? 'Vehicle' : activeTab === 'Trip Dispatcher' ? 'Trip' : activeTab === 'Maintenance' ? 'Record' : activeTab === 'Trip & Expense' ? 'Expense' : 'Item'}</button>
+                {/* Show button only for allowed roles and tabs */}
+                {(activeTab === 'Trip Dispatcher' || activeTab === 'Trip & Expense') && user?.role === 'driver' ? (
+                  <div style={{ padding: '8px 16px', fontSize: '13px', color: '#888', fontStyle: 'italic' }}>
+                    Only available to managers
+                  </div>
+                ) : (activeTab === 'Performance' || activeTab === 'Analytics') ? (
+                  <div></div>
+                ) : (
+                  <button style={styles.addBtn} onClick={() => {
+                    if (activeTab === 'Vehicle Registry') openModal('vehicle');
+                    else if (activeTab === 'Trip Dispatcher') openModal('trip');
+                    else if (activeTab === 'Maintenance') openModal('maintenance');
+                    else if (activeTab === 'Trip & Expense') openModal('expense');
+                    else openModal('driver');
+                  }}>+ Add {activeTab === 'Vehicle Registry' ? 'Vehicle' : activeTab === 'Trip Dispatcher' ? 'Trip' : activeTab === 'Maintenance' ? 'Record' : activeTab === 'Trip & Expense' ? 'Expense' : 'Item'}</button>
+                )}
               </div>
               <div style={styles.filterRow}>
                 <div>
@@ -625,7 +713,100 @@ export default function Dashboard() {
                     </tbody>
                   </table>
                 )}
-                {!isVehicles && (
+                {isUsers && (
+                  loadingUsers ? (
+                    <div style={{ padding: '40px', textAlign: 'center', color: '#aaa', fontSize: '14px' }}>
+                      Loading users...
+                    </div>
+                  ) : (
+                    <table style={styles.table}>
+                      <thead>
+                        <tr>
+                          <th style={styles.th}>Phone</th>
+                          <th style={styles.th}>Username</th>
+                          <th style={styles.th}>Email</th>
+                          <th style={styles.th}>Role</th>
+                          <th style={styles.th}>Joined</th>
+                          <th style={styles.th}>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredUsers.map(u => (
+                          <tr key={u.phone}>
+                            <td style={styles.td}>{u.phone}</td>
+                            <td style={styles.td}>{u.username || 'N/A'}</td>
+                            <td style={styles.td}>{u.email}</td>
+                            <td style={styles.td}>
+                              <span style={styles.statusBadge(u.role === 'admin' ? 'active' : 'available')}>
+                                {u.is_master ? '👑 Master' : u.role}
+                              </span>
+                            </td>
+                            <td style={styles.td}>
+                              {new Date(u.created_at).toLocaleDateString()}
+                            </td>
+                            <td style={styles.td}>
+                              {u.is_master ? (
+                                <span style={{ fontSize: '12px', color: '#888' }}>Protected</span>
+                              ) : (
+                                <button
+                                  style={{
+                                    ...styles.addBtn,
+                                    padding: '5px 12px',
+                                    fontSize: '12px',
+                                    background: u.role === 'admin' ? '#dc2626' : '#16a34a',
+                                  }}
+                                  onClick={() => handleToggleRole(u.phone, u.role)}
+                                >
+                                  {u.role === 'admin' ? 'Demote' : 'Promote'}
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )
+                )}
+                {!isVehicles && !isUsers && activeTab === 'Maintenance' && (
+                  maintenanceRecords.length === 0 ? (
+                    <div style={{ padding: '40px', textAlign: 'center', color: '#aaa', fontSize: '14px' }}>
+                      No maintenance records yet. Click "+ Add Record" to add one.
+                    </div>
+                  ) : (
+                    <table style={styles.table}>
+                      <thead>
+                        <tr>
+                          <th style={styles.th}>Vehicle #</th>
+                          <th style={styles.th}>Type</th>
+                          <th style={styles.th}>Description</th>
+                          <th style={styles.th}>Date</th>
+                          <th style={styles.th}>Cost ($)</th>
+                          <th style={styles.th}>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {maintenanceRecords.map(r => (
+                          <tr key={r.id}>
+                            <td style={styles.td}>{r.vehicle_number}</td>
+                            <td style={styles.td}>{r.type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</td>
+                            <td style={styles.td}>{r.description || '—'}</td>
+                            <td style={styles.td}>{r.date}</td>
+                            <td style={styles.td}>{r.cost ? `$${r.cost}` : '—'}</td>
+                            <td style={styles.td}>
+                              <button
+                                style={{ ...styles.addBtn, padding: '5px 12px', fontSize: '12px', background: '#16a34a' }}
+                                onClick={() => removeMaintenanceRecord(r.id)}
+                              >
+                                ✓ Done
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )
+                )}
+                {!isVehicles && !isUsers && activeTab !== 'Maintenance' && (
                   <div style={{ padding: '40px', textAlign: 'center', color: '#aaa', fontSize: '14px' }}>
                     {activeTab} — coming soon
                   </div>
@@ -762,7 +943,7 @@ export default function Dashboard() {
             {/* ---- Add Expense ---- */}
             {modalOpen === 'expense' && (
               <form onSubmit={handleExpenseSubmit}>
-                <h2 className="modal-title">Add Expense</h2>
+                <h2 className="modal-title">Add Trip Expense</h2>
                 {modalError && <div className="modal-error">{modalError}</div>}
                 <label className="modal-label">Vehicle Number *
                   <input className="modal-input" required value={expenseForm.vehicle_number} onChange={e => setExpenseForm({...expenseForm, vehicle_number: e.target.value})} placeholder="V001" />
@@ -770,7 +951,7 @@ export default function Dashboard() {
                 <label className="modal-label">Category *
                   <select className="modal-input" required value={expenseForm.category} onChange={e => setExpenseForm({...expenseForm, category: e.target.value})}>
                     <option value="">Select category…</option>
-                    <option value="fuel">Fuel</option>
+                    <option value="fuel">Fuel (Trip)</option>
                     <option value="toll">Toll</option>
                     <option value="parking">Parking</option>
                     <option value="repair">Repair</option>
@@ -778,8 +959,18 @@ export default function Dashboard() {
                     <option value="other">Other</option>
                   </select>
                 </label>
-                <label className="modal-label">Amount ($) *
-                  <input className="modal-input" type="number" required value={expenseForm.amount} onChange={e => setExpenseForm({...expenseForm, amount: e.target.value})} placeholder="0.00" />
+                {expenseForm.category === 'fuel' && (
+                  <>
+                    <label className="modal-label">Distance (km) *
+                      <input className="modal-input" type="number" step="0.1" required value={expenseForm.distance} onChange={e => setExpenseForm({...expenseForm, distance: e.target.value})} placeholder="100" />
+                    </label>
+                    <label className="modal-label">Vehicle Mileage (km/L) *
+                      <input className="modal-input" type="number" step="0.1" required value={expenseForm.mileage} onChange={e => setExpenseForm({...expenseForm, mileage: e.target.value})} placeholder="15" />
+                    </label>
+                  </>
+                )}
+                <label className="modal-label">Amount ($) {expenseForm.category === 'fuel' ? '(Auto-calculated)' : '*'}
+                  <input className="modal-input" type="number" step="0.01" required value={expenseForm.amount} onChange={e => setExpenseForm({...expenseForm, amount: e.target.value})} placeholder="0.00" readOnly={expenseForm.category === 'fuel' && expenseForm.distance && expenseForm.mileage} />
                 </label>
                 <label className="modal-label">Date
                   <input className="modal-input" type="date" value={expenseForm.date} onChange={e => setExpenseForm({...expenseForm, date: e.target.value})} />

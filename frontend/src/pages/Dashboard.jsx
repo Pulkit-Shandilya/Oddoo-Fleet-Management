@@ -24,10 +24,8 @@ const mockDrivers = [
 export default function Dashboard() {
   const { logout, user } = useAuth();
   const navigate = useNavigate();
-  const [vehicles, setVehicles] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('vehicles')) || mockVehicles; }
-    catch { return mockVehicles; }
-  });
+  const [vehicles, setVehicles] = useState([]);
+  const [loadingVehicles, setLoadingVehicles] = useState(true);
   const [drivers, setDrivers] = useState([]);
   const [users, setUsers] = useState([]);
   const [masterPhone, setMasterPhone] = useState('');
@@ -108,30 +106,31 @@ export default function Dashboard() {
     exportToCSV(data, headers, filename);
   };
 
+  const fetchVehicles = async () => {
+    setLoadingVehicles(true);
+    try {
+      const response = await vehicleService.getAll();
+      setVehicles(response.data.vehicles || []);
+    } catch (err) {
+      console.error('Failed to fetch vehicles:', err);
+    } finally { setLoadingVehicles(false); }
+  };
+
   const handleVehicleSubmit = async (e) => {
     e.preventDefault();
     setModalLoading(true); setModalError('');
     try {
       await vehicleService.create({
         vehicle_number: vehicleForm.vehicle_number,
+        make: vehicleForm.make || null,
+        model: vehicleForm.model || null,
+        license_plate: vehicleForm.license_plate || null,
         holding_capacity: vehicleForm.holding_capacity ? parseInt(vehicleForm.holding_capacity) : null,
         mileage: vehicleForm.mileage ? parseInt(vehicleForm.mileage) : 0,
         status: vehicleForm.status,
         driver_phone: vehicleForm.driver_phone || null,
       });
-      const newVehicle = {
-        id: Date.now(),
-        vehicle_number: vehicleForm.vehicle_number,
-        make: vehicleForm.make || '',
-        model: vehicleForm.model || '',
-        license_plate: vehicleForm.license_plate || '',
-        status: vehicleForm.status,
-      };
-      setVehicles(prev => {
-        const updated = [...prev, newVehicle];
-        localStorage.setItem('vehicles', JSON.stringify(updated));
-        return updated;
-      });
+      await fetchVehicles();
       setVehicleForm({ vehicle_number: '', make: '', model: '', license_plate: '', holding_capacity: '', mileage: '', status: 'active', driver_phone: '' });
       closeModal();
     } catch (err) {
@@ -139,12 +138,13 @@ export default function Dashboard() {
     } finally { setModalLoading(false); }
   };
 
-  const removeVehicle = (id) => {
-    setVehicles(prev => {
-      const updated = prev.filter(v => v.id !== id);
-      localStorage.setItem('vehicles', JSON.stringify(updated));
-      return updated;
-    });
+  const removeVehicle = async (vehicleNumber) => {
+    try {
+      await vehicleService.delete(vehicleNumber);
+      setVehicles(prev => prev.filter(v => v.vehicle_number !== vehicleNumber));
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to remove vehicle');
+    }
   };
 
   const handleDriverSubmit = async (e) => {
@@ -237,8 +237,9 @@ export default function Dashboard() {
     closeModal();
   };
 
-  // Fetch drivers from backend on mount
+  // Fetch vehicles + drivers from backend on mount
   useEffect(() => {
+    fetchVehicles();
     const fetchDrivers = async () => {
       try {
         const response = await driverService.getAll();
@@ -919,7 +920,7 @@ export default function Dashboard() {
                             <td style={styles.td}>
                               <button
                                 style={{ ...styles.addBtn, padding: '5px 12px', fontSize: '12px', background: '#dc2626' }}
-                                onClick={() => { if (window.confirm(`Remove vehicle ${v.vehicle_number}?`)) removeVehicle(v.id); }}
+                                onClick={() => { if (window.confirm(`Remove vehicle ${v.vehicle_number}?`)) removeVehicle(v.vehicle_number); }}
                               >
                                 Remove
                               </button>
@@ -1229,8 +1230,15 @@ export default function Dashboard() {
               <form onSubmit={handleMaintenanceSubmit}>
                 <h2 className="modal-title">Add Maintenance Record</h2>
                 {modalError && <div className="modal-error">{modalError}</div>}
-                <label className="modal-label">Vehicle Number *
-                  <input className="modal-input" required value={maintenanceForm.vehicle_number} onChange={e => setMaintenanceForm({...maintenanceForm, vehicle_number: e.target.value})} placeholder="V001" />
+                <label className="modal-label">Vehicle *
+                  <select className="modal-input" required value={maintenanceForm.vehicle_number} onChange={e => setMaintenanceForm({...maintenanceForm, vehicle_number: e.target.value})}>
+                    <option value="">Select vehicle…</option>
+                    {vehicles.map(v => (
+                      <option key={v.vehicle_number} value={v.vehicle_number}>
+                        {v.vehicle_number}{v.make ? ` — ${v.make}` : ''}{v.model ? ` ${v.model}` : ''}{v.license_plate ? ` (${v.license_plate})` : ''}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <label className="modal-label">Type *
                   <select className="modal-input" required value={maintenanceForm.type} onChange={e => setMaintenanceForm({...maintenanceForm, type: e.target.value})}>

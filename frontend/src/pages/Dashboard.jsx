@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { vehicleService, driverService } from '../services/api';
+import './Dashboard.css';
 
 const NAV_ITEMS = ['Dashboard', 'Vehicle Registry', 'Trip Dispatcher', 'Maintenance', 'Trip & Expense', 'Performance', 'Analytics'];
 
@@ -28,6 +30,75 @@ export default function Dashboard() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRows, setSelectedRows] = useState([]);
   const [showProfile, setShowProfile] = useState(false);
+  const [modalOpen, setModalOpen] = useState(null); // 'vehicle' | 'driver' | 'trip' | 'maintenance' | 'expense' | null
+  const [modalLoading, setModalLoading] = useState(false);
+  const [modalError, setModalError] = useState('');
+
+  // Form states
+  const [vehicleForm, setVehicleForm] = useState({ vehicle_number: '', holding_capacity: '', mileage: '', status: 'active', driver_phone: '' });
+  const [driverForm, setDriverForm] = useState({ name: '', phone: '', email: '', license_number: '', license_expiry: '', status: 'available' });
+  const [tripForm, setTripForm] = useState({ vehicle_number: '', driver_phone: '', origin: '', destination: '', date: '', distance: '' });
+  const [maintenanceForm, setMaintenanceForm] = useState({ vehicle_number: '', type: '', description: '', date: '', cost: '' });
+  const [expenseForm, setExpenseForm] = useState({ vehicle_number: '', category: '', amount: '', date: '', notes: '' });
+
+  const openModal = (type) => { setModalError(''); setModalOpen(type); };
+  const closeModal = () => { setModalOpen(null); setModalError(''); setModalLoading(false); };
+
+  const handleVehicleSubmit = async (e) => {
+    e.preventDefault();
+    setModalLoading(true); setModalError('');
+    try {
+      await vehicleService.create({
+        vehicle_number: vehicleForm.vehicle_number,
+        holding_capacity: vehicleForm.holding_capacity ? parseInt(vehicleForm.holding_capacity) : null,
+        mileage: vehicleForm.mileage ? parseInt(vehicleForm.mileage) : 0,
+        status: vehicleForm.status,
+        driver_phone: vehicleForm.driver_phone || null,
+      });
+      setVehicleForm({ vehicle_number: '', holding_capacity: '', mileage: '', status: 'active', driver_phone: '' });
+      closeModal();
+    } catch (err) {
+      setModalError(err.response?.data?.message || 'Failed to create vehicle');
+    } finally { setModalLoading(false); }
+  };
+
+  const handleDriverSubmit = async (e) => {
+    e.preventDefault();
+    setModalLoading(true); setModalError('');
+    try {
+      await driverService.create({
+        name: driverForm.name,
+        phone: driverForm.phone,
+        email: driverForm.email || null,
+        license_number: driverForm.license_number,
+        license_expiry: driverForm.license_expiry || null,
+        status: driverForm.status,
+      });
+      setDriverForm({ name: '', phone: '', email: '', license_number: '', license_expiry: '', status: 'available' });
+      closeModal();
+    } catch (err) {
+      setModalError(err.response?.data?.message || 'Failed to create driver');
+    } finally { setModalLoading(false); }
+  };
+
+  const handleTripSubmit = async (e) => {
+    e.preventDefault();
+    // placeholder — backend trip endpoint not yet implemented
+    setTripForm({ vehicle_number: '', driver_phone: '', origin: '', destination: '', date: '', distance: '' });
+    closeModal();
+  };
+
+  const handleMaintenanceSubmit = async (e) => {
+    e.preventDefault();
+    setMaintenanceForm({ vehicle_number: '', type: '', description: '', date: '', cost: '' });
+    closeModal();
+  };
+
+  const handleExpenseSubmit = async (e) => {
+    e.preventDefault();
+    setExpenseForm({ vehicle_number: '', category: '', amount: '', date: '', notes: '' });
+    closeModal();
+  };
 
   const { totalV, activeV, maintV, inactiveV } = useMemo(() => {
     const total = vehicles.length;
@@ -390,7 +461,7 @@ export default function Dashboard() {
     <div style={styles.root}>
       {/* Profile Popup Overlay */}
       {showProfile && <div style={styles.overlay} onClick={() => setShowProfile(false)} />}
-      
+
       {/* Profile Popup */}
       {showProfile && (
         <div style={styles.profilePopup}>
@@ -503,7 +574,13 @@ export default function Dashboard() {
             <>
               <div style={styles.actionRow}>
                 <div></div>
-                <button style={styles.addBtn}>+ Add {activeTab === 'Vehicle Registry' ? 'Vehicle' : 'Item'}</button>
+                <button style={styles.addBtn} onClick={() => {
+                  if (activeTab === 'Vehicle Registry') openModal('vehicle');
+                  else if (activeTab === 'Trip Dispatcher') openModal('trip');
+                  else if (activeTab === 'Maintenance') openModal('maintenance');
+                  else if (activeTab === 'Trip & Expense') openModal('expense');
+                  else openModal('driver');
+                }}>+ Add {activeTab === 'Vehicle Registry' ? 'Vehicle' : activeTab === 'Trip Dispatcher' ? 'Trip' : activeTab === 'Maintenance' ? 'Record' : activeTab === 'Trip & Expense' ? 'Expense' : 'Item'}</button>
               </div>
               <div style={styles.filterRow}>
                 <div>
@@ -558,6 +635,164 @@ export default function Dashboard() {
           )}
         </main>
       </div>
+
+      {/* ========== MODAL OVERLAY ========== */}
+      {modalOpen && (
+        <div className="modal-overlay" onClick={closeModal}>
+          <div className="modal-popup" onClick={e => e.stopPropagation()}>
+            <button className="modal-close" onClick={closeModal}>×</button>
+
+            {/* ---- Add Vehicle ---- */}
+            {modalOpen === 'vehicle' && (
+              <form onSubmit={handleVehicleSubmit}>
+                <h2 className="modal-title">Add Vehicle</h2>
+                {modalError && <div className="modal-error">{modalError}</div>}
+                <label className="modal-label">Vehicle Number *
+                  <input className="modal-input" required value={vehicleForm.vehicle_number} onChange={e => setVehicleForm({...vehicleForm, vehicle_number: e.target.value})} placeholder="e.g. V006" />
+                </label>
+                <label className="modal-label">Holding Capacity
+                  <input className="modal-input" type="number" value={vehicleForm.holding_capacity} onChange={e => setVehicleForm({...vehicleForm, holding_capacity: e.target.value})} placeholder="Passengers / Cargo" />
+                </label>
+                <label className="modal-label">Mileage
+                  <input className="modal-input" type="number" value={vehicleForm.mileage} onChange={e => setVehicleForm({...vehicleForm, mileage: e.target.value})} placeholder="0" />
+                </label>
+                <label className="modal-label">Status
+                  <select className="modal-input" value={vehicleForm.status} onChange={e => setVehicleForm({...vehicleForm, status: e.target.value})}>
+                    <option value="active">Active</option>
+                    <option value="maintenance">Maintenance</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </label>
+                <label className="modal-label">Driver Phone
+                  <input className="modal-input" value={vehicleForm.driver_phone} onChange={e => setVehicleForm({...vehicleForm, driver_phone: e.target.value})} placeholder="Optional" />
+                </label>
+                <button className="modal-submit" type="submit" disabled={modalLoading}>{modalLoading ? 'Creating…' : 'Add Vehicle'}</button>
+              </form>
+            )}
+
+            {/* ---- Add Driver ---- */}
+            {modalOpen === 'driver' && (
+              <form onSubmit={handleDriverSubmit}>
+                <h2 className="modal-title">Add Driver</h2>
+                {modalError && <div className="modal-error">{modalError}</div>}
+                <label className="modal-label">Full Name *
+                  <input className="modal-input" required value={driverForm.name} onChange={e => setDriverForm({...driverForm, name: e.target.value})} placeholder="John Doe" />
+                </label>
+                <label className="modal-label">Phone *
+                  <input className="modal-input" required value={driverForm.phone} onChange={e => setDriverForm({...driverForm, phone: e.target.value})} placeholder="+1234567890" />
+                </label>
+                <label className="modal-label">Email
+                  <input className="modal-input" type="email" value={driverForm.email} onChange={e => setDriverForm({...driverForm, email: e.target.value})} placeholder="driver@fleet.com" />
+                </label>
+                <label className="modal-label">License Number *
+                  <input className="modal-input" required value={driverForm.license_number} onChange={e => setDriverForm({...driverForm, license_number: e.target.value})} placeholder="DL-XXXXX" />
+                </label>
+                <label className="modal-label">License Expiry
+                  <input className="modal-input" type="date" value={driverForm.license_expiry} onChange={e => setDriverForm({...driverForm, license_expiry: e.target.value})} />
+                </label>
+                <label className="modal-label">Status
+                  <select className="modal-input" value={driverForm.status} onChange={e => setDriverForm({...driverForm, status: e.target.value})}>
+                    <option value="available">Available</option>
+                    <option value="assigned">Assigned</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </label>
+                <button className="modal-submit" type="submit" disabled={modalLoading}>{modalLoading ? 'Creating…' : 'Add Driver'}</button>
+              </form>
+            )}
+
+            {/* ---- Add Trip ---- */}
+            {modalOpen === 'trip' && (
+              <form onSubmit={handleTripSubmit}>
+                <h2 className="modal-title">Dispatch Trip</h2>
+                {modalError && <div className="modal-error">{modalError}</div>}
+                <label className="modal-label">Vehicle Number *
+                  <input className="modal-input" required value={tripForm.vehicle_number} onChange={e => setTripForm({...tripForm, vehicle_number: e.target.value})} placeholder="V001" />
+                </label>
+                <label className="modal-label">Driver Phone *
+                  <input className="modal-input" required value={tripForm.driver_phone} onChange={e => setTripForm({...tripForm, driver_phone: e.target.value})} placeholder="+1234567890" />
+                </label>
+                <label className="modal-label">Origin *
+                  <input className="modal-input" required value={tripForm.origin} onChange={e => setTripForm({...tripForm, origin: e.target.value})} placeholder="City A" />
+                </label>
+                <label className="modal-label">Destination *
+                  <input className="modal-input" required value={tripForm.destination} onChange={e => setTripForm({...tripForm, destination: e.target.value})} placeholder="City B" />
+                </label>
+                <label className="modal-label">Date
+                  <input className="modal-input" type="date" value={tripForm.date} onChange={e => setTripForm({...tripForm, date: e.target.value})} />
+                </label>
+                <label className="modal-label">Distance (km)
+                  <input className="modal-input" type="number" value={tripForm.distance} onChange={e => setTripForm({...tripForm, distance: e.target.value})} placeholder="0" />
+                </label>
+                <button className="modal-submit" type="submit" disabled={modalLoading}>{modalLoading ? 'Dispatching…' : 'Dispatch Trip'}</button>
+              </form>
+            )}
+
+            {/* ---- Add Maintenance ---- */}
+            {modalOpen === 'maintenance' && (
+              <form onSubmit={handleMaintenanceSubmit}>
+                <h2 className="modal-title">Add Maintenance Record</h2>
+                {modalError && <div className="modal-error">{modalError}</div>}
+                <label className="modal-label">Vehicle Number *
+                  <input className="modal-input" required value={maintenanceForm.vehicle_number} onChange={e => setMaintenanceForm({...maintenanceForm, vehicle_number: e.target.value})} placeholder="V001" />
+                </label>
+                <label className="modal-label">Type *
+                  <select className="modal-input" required value={maintenanceForm.type} onChange={e => setMaintenanceForm({...maintenanceForm, type: e.target.value})}>
+                    <option value="">Select type…</option>
+                    <option value="oil_change">Oil Change</option>
+                    <option value="tire_rotation">Tire Rotation</option>
+                    <option value="brake_service">Brake Service</option>
+                    <option value="engine_repair">Engine Repair</option>
+                    <option value="general">General Service</option>
+                  </select>
+                </label>
+                <label className="modal-label">Description
+                  <textarea className="modal-input modal-textarea" value={maintenanceForm.description} onChange={e => setMaintenanceForm({...maintenanceForm, description: e.target.value})} placeholder="Details…" />
+                </label>
+                <label className="modal-label">Date
+                  <input className="modal-input" type="date" value={maintenanceForm.date} onChange={e => setMaintenanceForm({...maintenanceForm, date: e.target.value})} />
+                </label>
+                <label className="modal-label">Cost ($)
+                  <input className="modal-input" type="number" value={maintenanceForm.cost} onChange={e => setMaintenanceForm({...maintenanceForm, cost: e.target.value})} placeholder="0" />
+                </label>
+                <button className="modal-submit" type="submit" disabled={modalLoading}>{modalLoading ? 'Saving…' : 'Add Record'}</button>
+              </form>
+            )}
+
+            {/* ---- Add Expense ---- */}
+            {modalOpen === 'expense' && (
+              <form onSubmit={handleExpenseSubmit}>
+                <h2 className="modal-title">Add Expense</h2>
+                {modalError && <div className="modal-error">{modalError}</div>}
+                <label className="modal-label">Vehicle Number *
+                  <input className="modal-input" required value={expenseForm.vehicle_number} onChange={e => setExpenseForm({...expenseForm, vehicle_number: e.target.value})} placeholder="V001" />
+                </label>
+                <label className="modal-label">Category *
+                  <select className="modal-input" required value={expenseForm.category} onChange={e => setExpenseForm({...expenseForm, category: e.target.value})}>
+                    <option value="">Select category…</option>
+                    <option value="fuel">Fuel</option>
+                    <option value="toll">Toll</option>
+                    <option value="parking">Parking</option>
+                    <option value="repair">Repair</option>
+                    <option value="insurance">Insurance</option>
+                    <option value="other">Other</option>
+                  </select>
+                </label>
+                <label className="modal-label">Amount ($) *
+                  <input className="modal-input" type="number" required value={expenseForm.amount} onChange={e => setExpenseForm({...expenseForm, amount: e.target.value})} placeholder="0.00" />
+                </label>
+                <label className="modal-label">Date
+                  <input className="modal-input" type="date" value={expenseForm.date} onChange={e => setExpenseForm({...expenseForm, date: e.target.value})} />
+                </label>
+                <label className="modal-label">Notes
+                  <textarea className="modal-input modal-textarea" value={expenseForm.notes} onChange={e => setExpenseForm({...expenseForm, notes: e.target.value})} placeholder="Optional notes…" />
+                </label>
+                <button className="modal-submit" type="submit" disabled={modalLoading}>{modalLoading ? 'Saving…' : 'Add Expense'}</button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

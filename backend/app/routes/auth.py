@@ -48,20 +48,20 @@ def login():
     data = request.get_json()
     
     if not data or not data.get('username') or not data.get('password'):
-        return jsonify({'message': 'Missing username or password'}), 400
+        return jsonify({'message': 'Missing user or password'}), 400
     
     # Find user
     user = User.query.filter_by(username=data['username']).first()
     
     if not user or not user.check_password(data['password']):
-        return jsonify({'message': 'Invalid username or password'}), 401
+        return jsonify({'message': 'Invalid user or password'}), 401
     
     # Create tokens
     access_token = create_access_token(identity=user.id)
     refresh_token = create_refresh_token(identity=user.id)
     
     return jsonify({
-        'message': 'Login successful',
+        'message': 'Login Done ✅',
         'access_token': access_token,
         'refresh_token': refresh_token,
         'user': user.to_dict()

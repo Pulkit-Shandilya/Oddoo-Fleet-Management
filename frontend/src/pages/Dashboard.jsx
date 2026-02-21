@@ -24,7 +24,10 @@ const mockDrivers = [
 export default function Dashboard() {
   const { logout, user } = useAuth();
   const navigate = useNavigate();
-  const [vehicles] = useState(mockVehicles);
+  const [vehicles, setVehicles] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('vehicles')) || mockVehicles; }
+    catch { return mockVehicles; }
+  });
   const [drivers] = useState(mockDrivers);
   const [users, setUsers] = useState([]);
   const [masterPhone, setMasterPhone] = useState('');
@@ -41,7 +44,7 @@ export default function Dashboard() {
   const [modalError, setModalError] = useState('');
 
   // Form states
-  const [vehicleForm, setVehicleForm] = useState({ vehicle_number: '', holding_capacity: '', mileage: '', status: 'active', driver_phone: '' });
+  const [vehicleForm, setVehicleForm] = useState({ vehicle_number: '', make: '', model: '', license_plate: '', holding_capacity: '', mileage: '', status: 'active', driver_phone: '' });
   const [driverForm, setDriverForm] = useState({ name: '', phone: '', email: '', license_number: '', license_expiry: '', status: 'available' });
   const [tripForm, setTripForm] = useState({ vehicle_number: '', driver_phone: '', origin: '', destination: '', date: '', distance: '' });
   const [maintenanceForm, setMaintenanceForm] = useState({ vehicle_number: '', type: '', description: '', date: '', cost: '' });
@@ -112,11 +115,32 @@ export default function Dashboard() {
         status: vehicleForm.status,
         driver_phone: vehicleForm.driver_phone || null,
       });
-      setVehicleForm({ vehicle_number: '', holding_capacity: '', mileage: '', status: 'active', driver_phone: '' });
+      const newVehicle = {
+        id: Date.now(),
+        vehicle_number: vehicleForm.vehicle_number,
+        make: vehicleForm.make || '',
+        model: vehicleForm.model || '',
+        license_plate: vehicleForm.license_plate || '',
+        status: vehicleForm.status,
+      };
+      setVehicles(prev => {
+        const updated = [...prev, newVehicle];
+        localStorage.setItem('vehicles', JSON.stringify(updated));
+        return updated;
+      });
+      setVehicleForm({ vehicle_number: '', make: '', model: '', license_plate: '', holding_capacity: '', mileage: '', status: 'active', driver_phone: '' });
       closeModal();
     } catch (err) {
       setModalError(err.response?.data?.message || 'Failed to create vehicle');
     } finally { setModalLoading(false); }
+  };
+
+  const removeVehicle = (id) => {
+    setVehicles(prev => {
+      const updated = prev.filter(v => v.id !== id);
+      localStorage.setItem('vehicles', JSON.stringify(updated));
+      return updated;
+    });
   };
 
   const handleDriverSubmit = async (e) => {
@@ -768,7 +792,11 @@ export default function Dashboard() {
               <div style={styles.actionRow}>
                 <div></div>
                 {/* Show button only for allowed roles and tabs */}
-                {(activeTab === 'Trip Dispatcher' || activeTab === 'Trip & Expense') && user?.role === 'driver' ? (
+                {activeTab === 'Vehicle Registry' && user?.role !== 'admin' ? (
+                  <div style={{ padding: '8px 16px', fontSize: '13px', color: '#888', fontStyle: 'italic' }}>
+                    Only available to admins
+                  </div>
+                ) : (activeTab === 'Trip Dispatcher' || activeTab === 'Trip & Expense') && user?.role === 'driver' ? (
                   <div style={{ padding: '8px 16px', fontSize: '13px', color: '#888', fontStyle: 'italic' }}>
                     Only available to managers
                   </div>
@@ -820,6 +848,7 @@ export default function Dashboard() {
                         <th style={styles.sortableTh} onClick={() => handleSort('model')}>Model {sortBy === 'model' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
                         <th style={styles.sortableTh} onClick={() => handleSort('license_plate')}>Plate {sortBy === 'license_plate' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
                         <th style={styles.sortableTh} onClick={() => handleSort('status')}>Status {sortBy === 'status' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+                        {user?.role === 'admin' && <th style={styles.th}>Action</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -831,6 +860,16 @@ export default function Dashboard() {
                           <td style={styles.td}>{v.model}</td>
                           <td style={styles.td}>{v.license_plate}</td>
                           <td style={styles.td}><span style={styles.statusBadge(v.status)}>{v.status}</span></td>
+                          {user?.role === 'admin' && (
+                            <td style={styles.td}>
+                              <button
+                                style={{ ...styles.addBtn, padding: '5px 12px', fontSize: '12px', background: '#dc2626' }}
+                                onClick={() => { if (window.confirm(`Remove vehicle ${v.vehicle_number}?`)) removeVehicle(v.id); }}
+                              >
+                                Remove
+                              </button>
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
@@ -957,6 +996,15 @@ export default function Dashboard() {
                 {modalError && <div className="modal-error">{modalError}</div>}
                 <label className="modal-label">Vehicle Number *
                   <input className="modal-input" required value={vehicleForm.vehicle_number} onChange={e => setVehicleForm({...vehicleForm, vehicle_number: e.target.value})} placeholder="e.g. V006" />
+                </label>
+                <label className="modal-label">Make
+                  <input className="modal-input" value={vehicleForm.make} onChange={e => setVehicleForm({...vehicleForm, make: e.target.value})} placeholder="e.g. Ford" />
+                </label>
+                <label className="modal-label">Model
+                  <input className="modal-input" value={vehicleForm.model} onChange={e => setVehicleForm({...vehicleForm, model: e.target.value})} placeholder="e.g. Transit" />
+                </label>
+                <label className="modal-label">License Plate
+                  <input className="modal-input" value={vehicleForm.license_plate} onChange={e => setVehicleForm({...vehicleForm, license_plate: e.target.value})} placeholder="e.g. ABC123" />
                 </label>
                 <label className="modal-label">Holding Capacity
                   <input className="modal-input" type="number" value={vehicleForm.holding_capacity} onChange={e => setVehicleForm({...vehicleForm, holding_capacity: e.target.value})} placeholder="Passengers / Cargo" />

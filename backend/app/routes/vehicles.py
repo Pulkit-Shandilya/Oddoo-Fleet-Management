@@ -44,6 +44,9 @@ def create_vehicle():
     # Create new vehicle
     vehicle = Vehicle(
         vehicle_number=data['vehicle_number'],
+        make=data.get('make'),
+        model=data.get('model'),
+        license_plate=data.get('license_plate'),
         holding_capacity=data.get('holding_capacity'),
         mileage=data.get('mileage', 0),
         status=data.get('status', 'active'),

@@ -28,7 +28,7 @@ export default function Dashboard() {
     try { return JSON.parse(localStorage.getItem('vehicles')) || mockVehicles; }
     catch { return mockVehicles; }
   });
-  const [drivers] = useState(mockDrivers);
+  const [drivers, setDrivers] = useState([]);
   const [users, setUsers] = useState([]);
   const [masterPhone, setMasterPhone] = useState('');
   const [loadingUsers, setLoadingUsers] = useState(false);
@@ -46,10 +46,14 @@ export default function Dashboard() {
   // Form states
   const [vehicleForm, setVehicleForm] = useState({ vehicle_number: '', make: '', model: '', license_plate: '', holding_capacity: '', mileage: '', status: 'active', driver_phone: '' });
   const [driverForm, setDriverForm] = useState({ name: '', phone: '', email: '', license_number: '', license_expiry: '', status: 'available' });
-  const [tripForm, setTripForm] = useState({ vehicle_number: '', driver_phone: '', origin: '', destination: '', date: '', distance: '' });
+  const [tripForm, setTripForm] = useState({ vehicle_number: '', driver_phone: '', origin: '', destination: '', date: '', distance: '', fuel_type: 'petrol' });
   const [maintenanceForm, setMaintenanceForm] = useState({ vehicle_number: '', type: '', description: '', date: '', cost: '' });
   const [maintenanceRecords, setMaintenanceRecords] = useState(() => {
     try { return JSON.parse(localStorage.getItem('maintenanceRecords')) || []; }
+    catch { return []; }
+  });
+  const [tripRecords, setTripRecords] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('tripRecords')) || []; }
     catch { return []; }
   });
   const [expenseForm, setExpenseForm] = useState({ vehicle_number: '', category: '', amount: '', date: '', notes: '', distance: '', mileage: '' });
@@ -162,10 +166,44 @@ export default function Dashboard() {
     } finally { setModalLoading(false); }
   };
 
+  // Fuel rates: price per unit, efficiency (km/unit), unit label
+  const FUEL_RATES = {
+    cng:    { label: 'CNG',    price: 77.09,  efficiency: 22.5, unit: 'kg' },
+    petrol: { label: 'Petrol', price: 99.00,  efficiency: 16.5, unit: 'L' },
+    diesel: { label: 'Diesel', price: 88.82,  efficiency: 20.0, unit: 'L' },
+  };
+
+  const calcFuelCost = (distance, fuelType) => {
+    const rate = FUEL_RATES[fuelType];
+    if (!rate || !distance || parseFloat(distance) <= 0) return { costPerKm: 0, totalCost: 0 };
+    const costPerKm = rate.price / rate.efficiency;
+    const totalCost = parseFloat(distance) * costPerKm;
+    return { costPerKm: +costPerKm.toFixed(2), totalCost: +totalCost.toFixed(2) };
+  };
+
   const handleTripSubmit = async (e) => {
     e.preventDefault();
-    // placeholder — backend trip endpoint not yet implemented
-    setTripForm({ vehicle_number: '', driver_phone: '', origin: '', destination: '', date: '', distance: '' });
+    const { costPerKm, totalCost } = calcFuelCost(tripForm.distance, tripForm.fuel_type);
+    const driverObj = drivers.find(d => (d.phone || d.id?.toString()) === tripForm.driver_phone);
+    const newTrip = {
+      id: Date.now(),
+      vehicle_number: tripForm.vehicle_number,
+      driver_phone: tripForm.driver_phone,
+      driver_name: driverObj ? driverObj.name : tripForm.driver_phone,
+      origin: tripForm.origin,
+      destination: tripForm.destination,
+      date: tripForm.date || new Date().toISOString().split('T')[0],
+      distance: tripForm.distance ? parseFloat(tripForm.distance) : 0,
+      fuel_type: tripForm.fuel_type,
+      cost_per_km: costPerKm,
+      fuel_cost: totalCost,
+    };
+    setTripRecords(prev => {
+      const updated = [newTrip, ...prev];
+      localStorage.setItem('tripRecords', JSON.stringify(updated));
+      return updated;
+    });
+    setTripForm({ vehicle_number: '', driver_phone: '', origin: '', destination: '', date: '', distance: '', fuel_type: 'petrol' });
     closeModal();
   };
 
@@ -199,7 +237,19 @@ export default function Dashboard() {
     closeModal();
   };
 
-  // Fetch users when User Management tab is active
+  // Fetch drivers from backend on mount
+  useEffect(() => {
+    const fetchDrivers = async () => {
+      try {
+        const response = await driverService.getAll();
+        setDrivers(response.data.drivers || response.data);
+      } catch (err) {
+        console.error('Failed to fetch drivers:', err);
+      }
+    };
+    fetchDrivers();
+  }, []);
+
   const fetchUsers = async () => {
     setLoadingUsers(true);
     try {
@@ -312,6 +362,11 @@ export default function Dashboard() {
     if (statusFilter !== 'all') data = data.filter(r => r.type === statusFilter);
     return sortData(data, sortBy, sortDir);
   }, [maintenanceRecords, searchTerm, statusFilter, sortBy, sortDir, sortData]);
+
+  const filteredTrips = useMemo(() => {
+    let data = tripRecords.filter(r => [r.vehicle_number, r.driver_name, r.origin, r.destination, r.fuel_type, r.date].join(' ').toLowerCase().includes(searchTerm.toLowerCase()));
+    return sortData(data, sortBy, sortDir);
+  }, [tripRecords, searchTerm, sortBy, sortDir, sortData]);
 
   const toggleRow = useCallback(pk => {
     setSelectedRows(prev => prev.includes(pk) ? prev.filter(r => r !== pk) : [...prev, pk]);
@@ -800,7 +855,7 @@ export default function Dashboard() {
                   <div style={{ padding: '8px 16px', fontSize: '13px', color: '#888', fontStyle: 'italic' }}>
                     Only available to managers
                   </div>
-                ) : (activeTab === 'Performance' || activeTab === 'Analytics') ? (
+                ) : activeTab === 'Performance' ? (
                   <div></div>
                 ) : (
                   <button style={styles.addBtn} onClick={() => {
@@ -972,7 +1027,69 @@ export default function Dashboard() {
                     </table>
                   )
                 )}
-                {!isVehicles && !isUsers && activeTab !== 'Maintenance' && (
+                {!isVehicles && !isUsers && activeTab === 'Performance' && (() => {
+                  const totalTrips = tripRecords.length;
+                  const totalDist = tripRecords.reduce((s, r) => s + (r.distance || 0), 0);
+                  const totalFuel = tripRecords.reduce((s, r) => s + (r.fuel_cost || 0), 0);
+                  const avgCostPerKm = totalDist > 0 ? (totalFuel / totalDist) : 0;
+                  const FUEL_COLORS = { cng: '#16a34a', petrol: '#d97706', diesel: '#2563eb' };
+                  return (
+                    <>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', padding: '16px 16px 0' }}>
+                        {[
+                          { label: 'Total Trips', value: totalTrips },
+                          { label: 'Total Distance', value: `${totalDist.toFixed(1)} km` },
+                          { label: 'Total Fuel Cost', value: `₹${totalFuel.toFixed(2)}` },
+                          { label: 'Avg Cost / km', value: `₹${avgCostPerKm.toFixed(2)}` },
+                        ].map(c => (
+                          <div key={c.label} style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '10px', padding: '14px 18px' }}>
+                            <div style={{ fontSize: '11px', color: '#888', marginBottom: '4px', fontWeight: 500 }}>{c.label}</div>
+                            <div style={{ fontSize: '22px', fontWeight: 700, color: '#111' }}>{c.value}</div>
+                          </div>
+                        ))}
+                      </div>
+                      {filteredTrips.length === 0 ? (
+                        <div style={{ padding: '40px', textAlign: 'center', color: '#aaa', fontSize: '14px' }}>
+                          No trips recorded yet. Dispatch a trip from the Trip Dispatcher tab.
+                        </div>
+                      ) : (
+                        <table style={styles.table}>
+                          <thead>
+                            <tr>
+                              <th style={styles.sortableTh} onClick={() => handleSort('date')}>Date {sortBy === 'date' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+                              <th style={styles.sortableTh} onClick={() => handleSort('vehicle_number')}>Vehicle {sortBy === 'vehicle_number' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+                              <th style={styles.sortableTh} onClick={() => handleSort('driver_name')}>Driver {sortBy === 'driver_name' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+                              <th style={styles.th}>Route</th>
+                              <th style={styles.sortableTh} onClick={() => handleSort('distance')}>Distance {sortBy === 'distance' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+                              <th style={styles.sortableTh} onClick={() => handleSort('fuel_type')}>Fuel {sortBy === 'fuel_type' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+                              <th style={styles.sortableTh} onClick={() => handleSort('cost_per_km')}>₹/km {sortBy === 'cost_per_km' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+                              <th style={styles.sortableTh} onClick={() => handleSort('fuel_cost')}>Fuel Cost {sortBy === 'fuel_cost' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filteredTrips.map(r => (
+                              <tr key={r.id}>
+                                <td style={styles.td}>{r.date}</td>
+                                <td style={styles.td}>{r.vehicle_number}</td>
+                                <td style={styles.td}>{r.driver_name || r.driver_phone}</td>
+                                <td style={styles.td}>{r.origin} → {r.destination}</td>
+                                <td style={styles.td}>{r.distance} km</td>
+                                <td style={styles.td}>
+                                  <span style={{ ...styles.statusBadge('active'), background: FUEL_COLORS[r.fuel_type] || '#888', color: '#fff', fontSize: '11px' }}>
+                                    {r.fuel_type?.toUpperCase()}
+                                  </span>
+                                </td>
+                                <td style={styles.td}>₹{r.cost_per_km}</td>
+                                <td style={styles.td}><strong>₹{r.fuel_cost}</strong></td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </>
+                  );
+                })()}
+                {!isVehicles && !isUsers && activeTab !== 'Maintenance' && activeTab !== 'Performance' && activeTab !== 'Analytics' && (
                   <div style={{ padding: '40px', textAlign: 'center', color: '#aaa', fontSize: '14px' }}>
                     {activeTab} — coming soon
                   </div>
@@ -1058,31 +1175,54 @@ export default function Dashboard() {
             )}
 
             {/* ---- Add Trip ---- */}
-            {modalOpen === 'trip' && (
-              <form onSubmit={handleTripSubmit}>
-                <h2 className="modal-title">Dispatch Trip</h2>
-                {modalError && <div className="modal-error">{modalError}</div>}
-                <label className="modal-label">Vehicle Number *
-                  <input className="modal-input" required value={tripForm.vehicle_number} onChange={e => setTripForm({...tripForm, vehicle_number: e.target.value})} placeholder="V001" />
-                </label>
-                <label className="modal-label">Driver Phone *
-                  <input className="modal-input" required value={tripForm.driver_phone} onChange={e => setTripForm({...tripForm, driver_phone: e.target.value})} placeholder="+1234567890" />
-                </label>
-                <label className="modal-label">Origin *
-                  <input className="modal-input" required value={tripForm.origin} onChange={e => setTripForm({...tripForm, origin: e.target.value})} placeholder="City A" />
-                </label>
-                <label className="modal-label">Destination *
-                  <input className="modal-input" required value={tripForm.destination} onChange={e => setTripForm({...tripForm, destination: e.target.value})} placeholder="City B" />
-                </label>
-                <label className="modal-label">Date
-                  <input className="modal-input" type="date" value={tripForm.date} onChange={e => setTripForm({...tripForm, date: e.target.value})} />
-                </label>
-                <label className="modal-label">Distance (km)
-                  <input className="modal-input" type="number" value={tripForm.distance} onChange={e => setTripForm({...tripForm, distance: e.target.value})} placeholder="0" />
-                </label>
-                <button className="modal-submit" type="submit" disabled={modalLoading}>{modalLoading ? 'Dispatching…' : 'Dispatch Trip'}</button>
-              </form>
-            )}
+            {modalOpen === 'trip' && (() => {
+              const fuelPreview = calcFuelCost(tripForm.distance, tripForm.fuel_type);
+              const rate = FUEL_RATES[tripForm.fuel_type];
+              return (
+                <form onSubmit={handleTripSubmit}>
+                  <h2 className="modal-title">Dispatch Trip</h2>
+                  {modalError && <div className="modal-error">{modalError}</div>}
+                  <label className="modal-label">Vehicle Number *
+                    <input className="modal-input" required value={tripForm.vehicle_number} onChange={e => setTripForm({...tripForm, vehicle_number: e.target.value})} placeholder="V001" />
+                  </label>
+                  <label className="modal-label">Driver *
+                    <select className="modal-input" required value={tripForm.driver_phone} onChange={e => setTripForm({...tripForm, driver_phone: e.target.value})}>
+                      <option value="">Select available driver…</option>
+                      {drivers.filter(d => d.status === 'available').map(d => (
+                        <option key={d.id} value={d.phone || d.id}>{d.name} — {d.license_number}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="modal-label">Origin *
+                    <input className="modal-input" required value={tripForm.origin} onChange={e => setTripForm({...tripForm, origin: e.target.value})} placeholder="City A" />
+                  </label>
+                  <label className="modal-label">Destination *
+                    <input className="modal-input" required value={tripForm.destination} onChange={e => setTripForm({...tripForm, destination: e.target.value})} placeholder="City B" />
+                  </label>
+                  <label className="modal-label">Date
+                    <input className="modal-input" type="date" value={tripForm.date} onChange={e => setTripForm({...tripForm, date: e.target.value})} />
+                  </label>
+                  <label className="modal-label">Distance (km) *
+                    <input className="modal-input" type="number" min="0" required value={tripForm.distance} onChange={e => setTripForm({...tripForm, distance: e.target.value})} placeholder="0" />
+                  </label>
+                  <label className="modal-label">Fuel Type *
+                    <select className="modal-input" value={tripForm.fuel_type} onChange={e => setTripForm({...tripForm, fuel_type: e.target.value})}>
+                      <option value="petrol">Petrol — ₹99/L, ~16.5 km/L</option>
+                      <option value="diesel">Diesel — ₹88.82/L, ~20 km/L</option>
+                      <option value="cng">CNG — ₹77.09/kg, ~22.5 km/kg</option>
+                    </select>
+                  </label>
+                  {tripForm.distance > 0 && (
+                    <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '10px 14px', marginBottom: '12px', fontSize: '13px' }}>
+                      <div style={{ fontWeight: 600, marginBottom: '4px', color: '#166534' }}>Estimated Fuel Cost</div>
+                      <div style={{ color: '#15803d' }}>₹{fuelPreview.costPerKm}/km × {tripForm.distance} km = <strong>₹{fuelPreview.totalCost}</strong></div>
+                      <div style={{ color: '#6b7280', fontSize: '11px', marginTop: '2px' }}>{rate?.label}: ₹{rate?.price}/{rate?.unit} @ {rate?.efficiency} km/{rate?.unit}</div>
+                    </div>
+                  )}
+                  <button className="modal-submit" type="submit" disabled={modalLoading}>{modalLoading ? 'Dispatching…' : 'Dispatch Trip'}</button>
+                </form>
+              );
+            })()}
 
             {/* ---- Add Maintenance ---- */}
             {modalOpen === 'maintenance' && (

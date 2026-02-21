@@ -5,6 +5,9 @@ class Vehicle(db.Model):
     __tablename__ = 'vehicles'
     
     vehicle_number = db.Column(db.String(50), primary_key=True, nullable=False)
+    make = db.Column(db.String(50))
+    model = db.Column(db.String(50))
+    license_plate = db.Column(db.String(30))
     holding_capacity = db.Column(db.Integer)  # passengers or cargo capacity
     mileage = db.Column(db.Integer, default=0)
     status = db.Column(db.String(20), default='active')  # active, maintenance, inactive
@@ -18,6 +21,9 @@ class Vehicle(db.Model):
         return {
             'id': self.vehicle_number,
             'vehicle_number': self.vehicle_number,
+            'make': self.make,
+            'model': self.model,
+            'license_plate': self.license_plate,
             'holding_capacity': self.holding_capacity,
             'mileage': self.mileage,
             'status': self.status,

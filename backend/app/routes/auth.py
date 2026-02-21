@@ -11,7 +11,7 @@ def register():
     data = request.get_json()
     
     # Validate required fields
-    if not data or not data.get('username') or not data.get('email') or not data.get('password'):
+    if not data or not data.get('phone') or not data.get('email') or not data.get('password'):
         return jsonify({'message': 'Missing required fields'}), 400
     
     # Validate email
@@ -21,15 +21,16 @@ def register():
         return jsonify({'message': 'Invalid email address'}), 400
     
     # Check if user already exists
-    if User.query.filter_by(username=data['username']).first():
-        return jsonify({'message': 'Username already exists'}), 400
+    if User.query.filter_by(phone=data['phone']).first():
+        return jsonify({'message': 'Phone number already exists'}), 400
     
     if User.query.filter_by(email=data['email']).first():
         return jsonify({'message': 'Email already exists'}), 400
     
     # Create new user
     user = User(
-        username=data['username'],
+        phone=data['phone'],
+        username=data.get('username'),
         email=data['email'],
         role=data.get('role', 'user')
     )
@@ -47,18 +48,18 @@ def register():
 def login():
     data = request.get_json()
     
-    if not data or not data.get('username') or not data.get('password'):
-        return jsonify({'message': 'Missing user or password'}), 400
+    if not data or not data.get('phone') or not data.get('password'):
+        return jsonify({'message': 'Missing phone or password'}), 400
     
     # Find user
-    user = User.query.filter_by(username=data['username']).first()
+    user = User.query.filter_by(phone=data['phone']).first()
     
     if not user or not user.check_password(data['password']):
-        return jsonify({'message': 'Invalid user or password'}), 401
+        return jsonify({'message': 'Invalid phone or password'}), 401
     
     # Create tokens
-    access_token = create_access_token(identity=str(user.id))
-    refresh_token = create_refresh_token(identity=str(user.id))
+    access_token = create_access_token(identity=user.phone)
+    refresh_token = create_refresh_token(identity=user.phone)
     
     return jsonify({
         'message': 'Login Done ✅',
@@ -70,15 +71,15 @@ def login():
 @auth_bp.route('/refresh', methods=['POST'])
 @jwt_required(refresh=True)
 def refresh():
-    current_user_id = get_jwt_identity()
-    access_token = create_access_token(identity=str(current_user_id))
+    current_user_phone = get_jwt_identity()
+    access_token = create_access_token(identity=current_user_phone)
     return jsonify({'access_token': access_token}), 200
 
 @auth_bp.route('/me', methods=['GET'])
 @jwt_required()
 def get_current_user():
-    current_user_id = get_jwt_identity()
-    user = User.query.get(int(current_user_id))
+    current_user_phone = get_jwt_identity()
+    user = User.query.get(current_user_phone)
     
     if not user:
         return jsonify({'message': 'User not found'}), 404

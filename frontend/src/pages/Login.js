@@ -6,7 +6,7 @@ import './Login.css';
 const Login = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [formData, setFormData] = useState({
-    username: '',
+    phone: '',
     email: '',
     password: '',
   });
@@ -30,20 +30,26 @@ const Login = () => {
     setSuccess('');
 
     if (isLogin) {
-      const result = await login(formData.username, formData.password);
+      const result = await login(formData.phone, formData.password);
       if (result.success) {
         navigate('/dashboard');
       } else {
         setError(result.message);
       }
     } else {
-      const result = await register(formData);
-      if (result.success) {
-        setSuccess(result.message);
-        setFormData({ username: '', email: '', password: '' });
-        setTimeout(() => setIsLogin(true), 2000);
+      const registerResult = await register(formData);
+      if (registerResult.success) {
+        setSuccess('Registration successful! Logging you in...');
+        // Auto-login after successful registration
+        const loginResult = await login(formData.phone, formData.password);
+        if (loginResult.success) {
+          navigate('/dashboard');
+        } else {
+          setError('Registration successful but auto-login failed. Please login manually.');
+          setTimeout(() => setIsLogin(true), 2000);
+        }
       } else {
-        setError(result.message);
+        setError(registerResult.message);
       }
     }
   };
@@ -59,11 +65,12 @@ const Login = () => {
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">
-            <label>Username</label>
+            <label>Phone Number</label>
             <input
-              type="text"
-              name="username"
-              value={formData.username}
+              type="tel"
+              name="phone"
+              placeholder="Enter your phone number"
+              value={formData.phone}
               onChange={handleChange}
               required
             />

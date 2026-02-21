@@ -24,8 +24,8 @@ def get_vehicle(vehicle_number):
 @vehicles_bp.route('/', methods=['POST'])
 @jwt_required()
 def create_vehicle():
-    current_user_id = get_jwt_identity()
-    user = User.query.get(current_user_id)
+    current_user_phone = get_jwt_identity()
+    user = User.query.get(current_user_phone)
     
     # Check if user has permission (admin or manager)
     if user.role not in ['admin', 'manager']:
@@ -47,7 +47,7 @@ def create_vehicle():
         holding_capacity=data.get('holding_capacity'),
         mileage=data.get('mileage', 0),
         status=data.get('status', 'active'),
-        driver_license=data.get('driver_license')
+        driver_phone=data.get('driver_phone')
     )
     
     db.session.add(vehicle)
@@ -61,8 +61,8 @@ def create_vehicle():
 @vehicles_bp.route('/<string:vehicle_number>', methods=['PUT'])
 @jwt_required()
 def update_vehicle(vehicle_number):
-    current_user_id = get_jwt_identity()
-    user = User.query.get(current_user_id)
+    current_user_phone = get_jwt_identity()
+    user = User.query.get(current_user_phone)
     
     # Check if user has permission
     if user.role not in ['admin', 'manager']:
@@ -82,8 +82,8 @@ def update_vehicle(vehicle_number):
         vehicle.mileage = data['mileage']
     if 'status' in data:
         vehicle.status = data['status']
-    if 'driver_license' in data:
-        vehicle.driver_license = data['driver_license']
+    if 'driver_phone' in data:
+        vehicle.driver_phone = data['driver_phone']
     
     db.session.commit()
     
@@ -95,8 +95,8 @@ def update_vehicle(vehicle_number):
 @vehicles_bp.route('/<string:vehicle_number>', methods=['DELETE'])
 @jwt_required()
 def delete_vehicle(vehicle_number):
-    current_user_id = get_jwt_identity()
-    user = User.query.get(current_user_id)
+    current_user_phone = get_jwt_identity()
+    user = User.query.get(current_user_phone)
     
     # Check if user has permission
     if user.role != 'admin':

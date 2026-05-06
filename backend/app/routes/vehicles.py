@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app import db
-from app.models import Vehicle, User
+from app.models import Vehicle
 
 vehicles_bp = Blueprint('vehicles', __name__)
 
@@ -25,11 +25,6 @@ def get_vehicle(vehicle_number):
 @jwt_required()
 def create_vehicle():
     current_user_phone = get_jwt_identity()
-    user = User.query.get(current_user_phone)
-    
-    # Check if user has permission (admin or manager)
-    if user.role not in ['admin', 'manager']:
-        return jsonify({'message': 'Unauthorized'}), 403
     
     data = request.get_json()
     
@@ -65,11 +60,6 @@ def create_vehicle():
 @jwt_required()
 def update_vehicle(vehicle_number):
     current_user_phone = get_jwt_identity()
-    user = User.query.get(current_user_phone)
-    
-    # Check if user has permission
-    if user.role not in ['admin', 'manager']:
-        return jsonify({'message': 'Unauthorized'}), 403
     
     vehicle = Vehicle.query.get(vehicle_number)
     
@@ -99,11 +89,6 @@ def update_vehicle(vehicle_number):
 @jwt_required()
 def delete_vehicle(vehicle_number):
     current_user_phone = get_jwt_identity()
-    user = User.query.get(current_user_phone)
-    
-    # Check if user has permission
-    if user.role != 'admin':
-        return jsonify({'message': 'Unauthorized'}), 403
     
     vehicle = Vehicle.query.get(vehicle_number)
     

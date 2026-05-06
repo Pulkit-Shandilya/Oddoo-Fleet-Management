@@ -129,6 +129,10 @@ odoo-fleet/
 
 This project is open source and available under the MIT License.
 
-## 👨‍💻 Author
+## 👨‍💻 Authors
 
-Pulkit Shandilya
+- Pulkit Shandilya
+- Lavya jaitly
+- Rishabh Parashar
+
+with the subtle help of our friend copilot baba

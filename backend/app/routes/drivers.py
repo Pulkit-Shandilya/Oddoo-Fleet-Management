@@ -10,7 +10,14 @@ drivers_bp = Blueprint('drivers', __name__)
 @jwt_required()
 def get_drivers():
     drivers = Driver.query.all()
-    return jsonify({'drivers': [driver.to_dict() for driver in drivers]}), 200
+    # Filter out drivers who are users with non-driver roles (e.g., managers)
+    actual_drivers = []
+    for driver in drivers:
+        user = User.query.filter_by(phone=driver.phone).first()
+        # Include driver if no user record exists, or if user has role='driver'
+        if not user or user.role == 'driver':
+            actual_drivers.append(driver)
+    return jsonify({'drivers': [driver.to_dict() for driver in actual_drivers]}), 200
 
 @drivers_bp.route('/<string:phone>', methods=['GET'])
 @jwt_required()

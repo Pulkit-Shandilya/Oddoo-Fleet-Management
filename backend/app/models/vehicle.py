@@ -11,6 +11,7 @@ class Vehicle(db.Model):
     holding_capacity = db.Column(db.Integer)  # passengers or cargo capacity
     mileage = db.Column(db.Integer, default=0)
     status = db.Column(db.String(20), default='active')  # active, maintenance, inactive
+    maintenance_end_date = db.Column(db.DateTime, nullable=True)  # When maintenance will be complete
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -28,6 +29,7 @@ class Vehicle(db.Model):
             'mileage': self.mileage,
             'status': self.status,
             'driver_phone': self.driver_phone,
+            'maintenance_end_date': self.maintenance_end_date.isoformat() if self.maintenance_end_date else None,
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat()
         }

@@ -537,6 +537,22 @@ body {
   font-weight: 500;
 }
 
+/* Dashboard Section */
+.dashboard-section {
+  background: var(--white);
+  border: 1px solid var(--gray-border);
+  border-radius: 8px;
+  padding: 24px;
+  margin-top: 24px;
+}
+
+.dashboard-section h2 {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: var(--text-primary);
+}
+
 /* Data Table */
 .data-table {
   width: 100%;
@@ -710,6 +726,15 @@ body {
 
 .action-btn.danger:hover {
   background: var(--gray-border);
+}
+
+.action-btn.success {
+  background: var(--success-bg, #d4edda);
+  color: var(--success, #155724);
+}
+
+.action-btn.success:hover {
+  background: var(--success-hover, #c3e6cb);
 }
 
 /* Responsive */

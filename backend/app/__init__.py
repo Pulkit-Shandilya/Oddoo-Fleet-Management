@@ -27,10 +27,14 @@ def create_app(config_class=Config):
     from .routes.vehicles import vehicles_bp
     from .routes.drivers import drivers_bp
     from .routes.users import users_bp
+    from .routes.trips import trips_bp
+    from .routes.maintenance import maintenance_bp
     
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(vehicles_bp, url_prefix='/api/vehicles')
     app.register_blueprint(drivers_bp, url_prefix='/api/drivers')
     app.register_blueprint(users_bp, url_prefix='/api/users')
+    app.register_blueprint(trips_bp, url_prefix='/api/trips')
+    app.register_blueprint(maintenance_bp, url_prefix='/api/maintenance')
     
     return app

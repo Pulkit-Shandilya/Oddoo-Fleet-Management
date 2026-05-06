@@ -177,3 +177,76 @@ const userService = {
     });
   },
 };
+
+/**
+ * Trip Service
+ */
+const tripService = {
+  async getAll(status = null) {
+    const url = status ? `/trips/?status=${status}` : '/trips/';
+    return apiRequest(url, {
+      method: 'GET',
+    });
+  },
+
+  async create(tripData) {
+    return apiRequest('/trips/', {
+      method: 'POST',
+      body: JSON.stringify(tripData),
+    });
+  },
+
+  async getById(id) {
+    return apiRequest(`/trips/${id}`, {
+      method: 'GET',
+    });
+  },
+
+  async complete(id) {
+    return apiRequest(`/trips/${id}/complete`, {
+      method: 'PUT',
+    });
+  },
+
+  async delete(id) {
+    return apiRequest(`/trips/${id}`, {
+      method: 'DELETE',
+    });
+  },
+};
+
+/**
+ * Maintenance Service
+ */
+const maintenanceService = {
+  async getAll() {
+    return apiRequest('/maintenance/', {
+      method: 'GET',
+    });
+  },
+
+  async getByVehicle(vehicleNumber) {
+    return apiRequest(`/maintenance/vehicle/${vehicleNumber}`, {
+      method: 'GET',
+    });
+  },
+
+  async create(maintenanceData) {
+    return apiRequest('/maintenance/', {
+      method: 'POST',
+      body: JSON.stringify(maintenanceData),
+    });
+  },
+
+  async complete(id) {
+    return apiRequest(`/maintenance/${id}/complete`, {
+      method: 'PUT',
+    });
+  },
+
+  async checkExpired() {
+    return apiRequest('/maintenance/check-expired', {
+      method: 'POST',
+    });
+  },
+};

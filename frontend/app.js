@@ -99,6 +99,11 @@ function showDashboard() {
   }
 
   switchTab('Dashboard');
+  // Load dashboard data if not already loaded
+  if (appState.vehicles.length === 0 && appState.drivers.length === 0) {
+    console.log('No data loaded yet, loading dashboard data...');
+    loadDashboardData();
+  }
 }
 
 /**
@@ -239,13 +244,33 @@ async function loadDashboardData() {
     console.log(`[loadDashboardData] Fetching vehicles...`);
     const vehiclesResponse = await vehicleService.getAll();
     console.log(`[loadDashboardData] Vehicles response:`, vehiclesResponse);
-    appState.vehicles = vehiclesResponse.vehicles || [];
+    appState.vehicles = vehiclesResponse.vehicles || vehiclesResponse.data || [];
+    console.log(`[loadDashboardData] appState.vehicles set to:`, appState.vehicles);
     
     // Load drivers
     console.log(`[loadDashboardData] Fetching drivers...`);
     const driversResponse = await driverService.getAll();
     console.log(`[loadDashboardData] Drivers response:`, driversResponse);
-    appState.drivers = driversResponse.drivers || [];
+    appState.drivers = driversResponse.drivers || driversResponse.data || [];
+    console.log(`[loadDashboardData] appState.drivers set to:`, appState.drivers);
+    
+    // Load active trips
+    console.log(`[loadDashboardData] Fetching active trips...`);
+    const tripsResponse = await tripService.getAll('active');
+    console.log(`[loadDashboardData] Trips response:`, tripsResponse);
+    appState.tripRecords = tripsResponse.trips || [];
+    console.log(`[loadDashboardData] appState.tripRecords set to:`, appState.tripRecords);
+    
+    // Load maintenance records
+    console.log(`[loadDashboardData] Fetching maintenance records...`);
+    const maintenanceResponse = await maintenanceService.getAll();
+    console.log(`[loadDashboardData] Maintenance response:`, maintenanceResponse);
+    appState.maintenanceRecords = maintenanceResponse.maintenance || [];
+    console.log(`[loadDashboardData] appState.maintenanceRecords set to:`, appState.maintenanceRecords);
+    
+    // Check for expired maintenance
+    console.log(`[loadDashboardData] Checking for expired maintenance...`);
+    await maintenanceService.checkExpired();
     
     // Update dashboard stats
     updateDashboardStats();
@@ -254,9 +279,17 @@ async function loadDashboardData() {
     console.log(`[loadDashboardData] Rendering tables...`);
     renderVehiclesTable();
     renderDriversTable();
+    renderTripsTable();
+    renderDashboardActiveTrips();
+    renderMaintenanceTable();
     console.log(`[loadDashboardData] Dashboard data loaded successfully`);
   } catch (error) {
     console.error('Failed to load dashboard data:', error);
+    console.error('Error details:', {
+      message: error.message,
+      status: error.status,
+      data: error.data
+    });
   }
 }
 
@@ -267,12 +300,12 @@ function updateDashboardStats() {
   const totalVehicles = appState.vehicles.length;
   const activeVehicles = appState.vehicles.filter(v => v.status === 'active').length;
   const totalDrivers = appState.drivers.length;
-  const totalUsers = appState.users.length;
+  const activeTrips = appState.tripRecords.length;
   
   document.getElementById('stat-total-vehicles').textContent = totalVehicles;
   document.getElementById('stat-active-vehicles').textContent = activeVehicles;
   document.getElementById('stat-drivers').textContent = totalDrivers;
-  document.getElementById('stat-users').textContent = totalUsers;
+  document.getElementById('stat-active-trips').textContent = activeTrips;
 }
 
 /**
@@ -317,6 +350,11 @@ function switchTab(tabName, event) {
   if (tabName === 'User Management') {
     console.log(`[switchTab] Loading user management data`);
     loadUserManagementData();
+  }
+  
+  if (tabName === 'Trip & Expense') {
+    console.log(`[switchTab] Loading completed trips data`);
+    renderCompletedTrips();
   }
 }
 
@@ -385,7 +423,7 @@ function renderMaintenanceTable() {
   const records = appState.maintenanceRecords;
   
   if (records.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" class="empty-row">No maintenance records found</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-row">No maintenance records found</td></tr>';
     return;
   }
   
@@ -395,9 +433,11 @@ function renderMaintenanceTable() {
       <td>${record.type}</td>
       <td>${record.description || '—'}</td>
       <td>${record.date}</td>
+      <td>${record.duration_days} day(s)</td>
       <td>$${parseFloat(record.cost || 0).toFixed(2)}</td>
+      <td><span class="badge ${record.status}">${record.status}</span></td>
       <td>
-        <button class="action-btn danger" onclick="deleteMaintenanceRecord(${record.id})">Delete</button>
+        ${record.status !== 'completed' ? `<button class="action-btn success" onclick="completeMaintenanceRecord(${record.id})">Complete</button>` : '—'}
       </td>
     </tr>
   `).join('');
@@ -734,13 +774,33 @@ function editDriver(phone) {
  * Trip Management
  */
 function openAddTripModal() {
-  document.getElementById('trip-vehicle').value = '';
-  document.getElementById('trip-driver').value = '';
+  // Reset form fields
   document.getElementById('trip-origin').value = '';
   document.getElementById('trip-destination').value = '';
   document.getElementById('trip-date').value = new Date().toISOString().split('T')[0];
   document.getElementById('trip-distance').value = '';
   document.getElementById('trip-fuel-type').value = 'petrol';
+  
+  // Populate vehicle dropdown
+  const vehicleSelect = document.getElementById('trip-vehicle');
+  vehicleSelect.innerHTML = '<option value="">Select a vehicle</option>';
+  appState.vehicles.forEach(vehicle => {
+    const option = document.createElement('option');
+    option.value = vehicle.vehicle_number;
+    option.textContent = `${vehicle.vehicle_number} - ${vehicle.make} ${vehicle.model}`;
+    vehicleSelect.appendChild(option);
+  });
+  
+  // Populate driver dropdown
+  const driverSelect = document.getElementById('trip-driver');
+  driverSelect.innerHTML = '<option value="">Select a driver</option>';
+  appState.drivers.forEach(driver => {
+    const option = document.createElement('option');
+    option.value = driver.phone;
+    option.textContent = `${driver.name} (${driver.phone})`;
+    driverSelect.appendChild(option);
+  });
+  
   document.getElementById('trip-modal').classList.add('active');
 }
 
@@ -748,7 +808,6 @@ async function handleTripSubmit(event) {
   event.preventDefault();
   
   const trip = {
-    id: Date.now(),
     vehicle_number: document.getElementById('trip-vehicle').value,
     driver_phone: document.getElementById('trip-driver').value,
     origin: document.getElementById('trip-origin').value,
@@ -758,12 +817,17 @@ async function handleTripSubmit(event) {
     fuel_type: document.getElementById('trip-fuel-type').value,
   };
   
-  appState.tripRecords.push(trip);
-  localStorage.setItem('tripRecords', JSON.stringify(appState.tripRecords));
-  
-  closeModal('trip-modal');
-  renderTripsTable();
-  showSuccess('Trip created successfully');
+  try {
+    const response = await tripService.create(trip);
+    appState.tripRecords.push(response.trip);
+    closeModal('trip-modal');
+    renderTripsTable();
+    updateDashboardStats();
+    showSuccess('Trip created successfully');
+  } catch (error) {
+    console.error('Failed to create trip:', error);
+    showError('Failed to create trip: ' + (error.message || 'Unknown error'));
+  }
 }
 
 function renderTripsTable() {
@@ -771,7 +835,7 @@ function renderTripsTable() {
   const trips = appState.tripRecords;
   
   if (trips.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" class="empty-row">No trips found</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-row">No active trips found</td></tr>';
     return;
   }
   
@@ -784,10 +848,76 @@ function renderTripsTable() {
       <td>${trip.date}</td>
       <td>${trip.distance} km</td>
       <td>
-        <button class="action-btn danger" onclick="deleteTrip(${trip.id})">Delete</button>
+        <button class="action-btn success" onclick="completeTrip(${trip.id})">Trip Complete</button>
       </td>
     </tr>
   `).join('');
+}
+
+function renderDashboardActiveTrips() {
+  const tbody = document.getElementById('active-trips-tbody');
+  const trips = appState.tripRecords;
+  
+  if (trips.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-row">No active trips</td></tr>';
+    return;
+  }
+  
+  tbody.innerHTML = trips.map(trip => `
+    <tr>
+      <td>${trip.vehicle_number}</td>
+      <td>${trip.driver_phone}</td>
+      <td>${trip.origin}</td>
+      <td>${trip.destination}</td>
+      <td>${trip.date}</td>
+      <td>${trip.distance} km</td>
+      <td><span class="badge active">Active</span></td>
+    </tr>
+  `).join('');
+}
+
+async function renderCompletedTrips() {
+  try {
+    const completedResponse = await tripService.getAll('completed');
+    const completedTrips = completedResponse.trips || [];
+    
+    const tbody = document.getElementById('completed-trips-tbody');
+    
+    if (completedTrips.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" class="empty-row">No completed trips</td></tr>';
+      return;
+    }
+    
+    tbody.innerHTML = completedTrips.map(trip => `
+      <tr>
+        <td>${trip.vehicle_number}</td>
+        <td>${trip.driver_phone}</td>
+        <td>${trip.origin}</td>
+        <td>${trip.destination}</td>
+        <td>${trip.date}</td>
+        <td>${trip.distance} km</td>
+        <td>${trip.completed_at ? new Date(trip.completed_at).toLocaleDateString() : '—'}</td>
+      </tr>
+    `).join('');
+  } catch (error) {
+    console.error('Failed to load completed trips:', error);
+  }
+}
+
+async function completeTrip(tripId) {
+  if (!confirm('Are you sure you want to mark this trip as complete?')) return;
+  
+  try {
+    await tripService.complete(tripId);
+    // Remove from active trips
+    appState.tripRecords = appState.tripRecords.filter(t => t.id !== tripId);
+    renderTripsTable();
+    updateDashboardStats();
+    showSuccess('Trip completed successfully');
+  } catch (error) {
+    console.error('Failed to complete trip:', error);
+    showError('Failed to complete trip: ' + (error.message || 'Unknown error'));
+  }
 }
 
 function deleteTrip(tripId) {
@@ -803,11 +933,23 @@ function deleteTrip(tripId) {
  * Maintenance Management
  */
 function openAddMaintenanceModal() {
-  document.getElementById('maintenance-vehicle').value = '';
+  // Reset form fields
   document.getElementById('maintenance-type').value = '';
   document.getElementById('maintenance-description').value = '';
   document.getElementById('maintenance-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('maintenance-duration').value = '1';
   document.getElementById('maintenance-cost').value = '';
+  
+  // Populate vehicle dropdown
+  const vehicleSelect = document.getElementById('maintenance-vehicle');
+  vehicleSelect.innerHTML = '<option value="">Select a vehicle</option>';
+  appState.vehicles.forEach(vehicle => {
+    const option = document.createElement('option');
+    option.value = vehicle.vehicle_number;
+    option.textContent = `${vehicle.vehicle_number} - ${vehicle.make} ${vehicle.model} (${vehicle.status})`;
+    vehicleSelect.appendChild(option);
+  });
+  
   document.getElementById('maintenance-modal').classList.add('active');
 }
 
@@ -815,20 +957,63 @@ async function handleMaintenanceSubmit(event) {
   event.preventDefault();
   
   const record = {
-    id: Date.now(),
     vehicle_number: document.getElementById('maintenance-vehicle').value,
     type: document.getElementById('maintenance-type').value,
     description: document.getElementById('maintenance-description').value,
     date: document.getElementById('maintenance-date').value,
+    duration_days: parseInt(document.getElementById('maintenance-duration').value) || 1,
     cost: parseFloat(document.getElementById('maintenance-cost').value) || 0,
   };
   
-  appState.maintenanceRecords.push(record);
-  localStorage.setItem('maintenanceRecords', JSON.stringify(appState.maintenanceRecords));
+  try {
+    const response = await maintenanceService.create(record);
+    appState.maintenanceRecords.push(response.maintenance);
+    
+    // Update the vehicle status in appState
+    const vehicleIdx = appState.vehicles.findIndex(v => v.vehicle_number === record.vehicle_number);
+    if (vehicleIdx !== -1) {
+      appState.vehicles[vehicleIdx] = response.vehicle;
+    }
+    
+    closeModal('maintenance-modal');
+    renderMaintenanceTable();
+    renderVehiclesTable();
+    updateDashboardStats();
+    showSuccess('Maintenance record created successfully');
+  } catch (error) {
+    console.error('Failed to create maintenance record:', error);
+    showError('Failed to create maintenance record: ' + (error.message || 'Unknown error'));
+  }
+}
+
+async function completeMaintenanceRecord(recordId) {
+  if (!confirm('Are you sure you want to mark this maintenance as complete?')) return;
   
-  closeModal('maintenance-modal');
-  renderMaintenanceTable();
-  showSuccess('Maintenance record created successfully');
+  try {
+    const response = await maintenanceService.complete(recordId);
+    
+    // Update the maintenance record in appState
+    const mainIdx = appState.maintenanceRecords.findIndex(r => r.id === recordId);
+    if (mainIdx !== -1) {
+      appState.maintenanceRecords[mainIdx] = response.maintenance;
+    }
+    
+    // Update the vehicle in appState
+    if (response.vehicle) {
+      const vehicleIdx = appState.vehicles.findIndex(v => v.vehicle_number === response.vehicle.vehicle_number);
+      if (vehicleIdx !== -1) {
+        appState.vehicles[vehicleIdx] = response.vehicle;
+      }
+    }
+    
+    renderMaintenanceTable();
+    renderVehiclesTable();
+    updateDashboardStats();
+    showSuccess('Maintenance completed successfully and vehicle restored to active');
+  } catch (error) {
+    console.error('Failed to complete maintenance:', error);
+    showError('Failed to complete maintenance: ' + (error.message || 'Unknown error'));
+  }
 }
 
 function deleteMaintenanceRecord(recordId) {

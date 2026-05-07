@@ -12,7 +12,7 @@ requests==2.32.5
 
 # Database
 # Uncomment the database driver you need:
-psycopg2  # For PostgreSQL (recommended for Heroku)
+psycopg2-binary==2.9.9  # For PostgreSQL (binary version for Heroku compatibility)
 # PyMySQL==1.1.0  # For MySQL
 # Or use SQLite (included in Python)
 

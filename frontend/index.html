@@ -108,10 +108,10 @@
                     <button class="nav-button active" data-tab="Dashboard" onclick="switchTab('Dashboard', event)">Dashboard</button>
                     <button class="nav-button" data-tab="Vehicle Registry" onclick="switchTab('Vehicle Registry', event)">Vehicle Registry</button>
                     <button class="nav-button" data-tab="Drivers" onclick="switchTab('Drivers', event)">Drivers</button>
-                    <button class="nav-button" data-tab="Trip Dispatcher" onclick="switchTab('Trip Dispatcher', event)">Trip Dispatcher</button>
+                    <button class="nav-button" id="trip-dispatcher-btn" data-tab="Trip Dispatcher" onclick="switchTab('Trip Dispatcher', event)">Trip Dispatcher</button>
                     <button class="nav-button" data-tab="Maintenance" onclick="switchTab('Maintenance', event)">Maintenance</button>
                     <button class="nav-button" data-tab="Trip & Expense" onclick="switchTab('Trip & Expense', event)">Trip & Expense</button>
-                    <button class="nav-button" data-tab="User Management" onclick="switchTab('User Management', event)">User Management</button>
+                    <button class="nav-button" id="user-management-btn" data-tab="User Management" onclick="switchTab('User Management', event)">User Management</button>
                 </div>
             </aside>
 
@@ -174,7 +174,7 @@
                                 <option value="maintenance">Maintenance</option>
                                 <option value="inactive">Inactive</option>
                             </select>
-                            <button class="btn-primary" onclick="openAddVehicleModal()">Add Vehicle</button>
+                            <button class="btn-primary" id="add-vehicle-btn" onclick="openAddVehicleModal()">Add Vehicle</button>
                             <button class="btn-secondary" onclick="exportData('vehicles')">Export CSV</button>
                         </div>
                     </div>
@@ -231,7 +231,7 @@
                 <div class="tab-content" id="tab-Trip Dispatcher">
                     <div class="tab-header">
                         <h1>Trip Dispatcher</h1>
-                        <button class="btn-primary" onclick="openAddTripModal()">Create Trip</button>
+                        <button class="btn-primary" id="create-trip-btn" onclick="openAddTripModal()">Create Trip</button>
                     </div>
                     <table class="data-table" id="trips-table">
                         <thead>
@@ -255,7 +255,7 @@
                 <div class="tab-content" id="tab-Maintenance">
                     <div class="tab-header">
                         <h1>Maintenance Records</h1>
-                        <button class="btn-primary" onclick="openAddMaintenanceModal()">Add Maintenance</button>
+                        <button class="btn-primary" id="add-maintenance-btn" onclick="openAddMaintenanceModal()">Add Maintenance</button>
                         <button class="btn-secondary" onclick="exportData('maintenance')">Export CSV</button>
                     </div>
                     <table class="data-table" id="maintenance-table">
@@ -280,45 +280,24 @@
                 <!-- Trip & Expense Tab -->
                 <div class="tab-content" id="tab-Trip & Expense">
                     <div class="tab-header">
-                        <h1>Trip & Expenses</h1>
-                        <button class="btn-primary" onclick="openAddExpenseModal()">Add Expense</button>
-                        <button class="btn-secondary" onclick="exportData('expenses')">Export CSV</button>
+                        <h1>Trip & Expenses Archive</h1>
+                        <button class="btn-secondary" onclick="exportData('archival')">Export CSV</button>
                     </div>
                     
-                    <!-- Completed Trips Archive -->
-                    <h2 style="margin-top: 24px; margin-bottom: 16px; font-size: 18px; font-weight: 600;">Completed Trips</h2>
-                    <table class="data-table" id="completed-trips-table">
+                    <!-- Combined Archival Table -->
+                    <table class="data-table" id="archival-table">
                         <thead>
                             <tr>
+                                <th>Type</th>
                                 <th>Vehicle</th>
-                                <th>Driver</th>
-                                <th>Origin</th>
-                                <th>Destination</th>
-                                <th>Date</th>
-                                <th>Distance</th>
-                                <th>Completed</th>
-                            </tr>
-                        </thead>
-                        <tbody id="completed-trips-tbody">
-                            <tr><td colspan="7" class="empty-row">No completed trips</td></tr>
-                        </tbody>
-                    </table>
-                    
-                    <!-- Expenses -->
-                    <h2 style="margin-top: 24px; margin-bottom: 16px; font-size: 18px; font-weight: 600;">Expenses</h2>
-                    <table class="data-table" id="expense-table">
-                        <thead>
-                            <tr>
-                                <th>Vehicle</th>
-                                <th>Category</th>
+                                <th>Details</th>
                                 <th>Amount</th>
                                 <th>Date</th>
-                                <th>Notes</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
-                        <tbody id="expense-tbody">
-                            <tr><td colspan="6" class="empty-row">No expenses found</td></tr>
+                        <tbody id="archival-tbody">
+                            <tr><td colspan="6" class="empty-row">No records found</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -327,6 +306,7 @@
                 <div class="tab-content" id="tab-User Management">
                     <div class="tab-header">
                         <h1>User Management</h1>
+                        <p style="font-size: 12px; color: #666; margin: 0;">Managers and Drivers</p>
                         <button class="btn-secondary" onclick="exportData('users')">Export CSV</button>
                     </div>
                     <table class="data-table" id="users-table">

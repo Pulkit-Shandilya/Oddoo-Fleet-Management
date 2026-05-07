@@ -1,0 +1,20 @@
+{
+  "name": "odoo-fleet-management",
+  "version": "1.0.0",
+  "description": "Fleet Management System with Python backend and Node.js frontend",
+  "main": "backend/main.py",
+  "scripts": {
+    "postinstall": "pip install -r requirements.txt && cd frontend && npm install",
+    "start": "python backend/main.py",
+    "dev": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build"
+  },
+  "engines": {
+    "node": "18.x",
+    "python": "3.10.x"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "devDependencies": {}
+}

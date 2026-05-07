@@ -11,7 +11,7 @@ auth_bp = Blueprint('auth', __name__)
 def register():
     data = request.get_json()
     
-    # Validate required fields
+    # Validate  fields
     if not data or not data.get('phone') or not data.get('email') or not data.get('password'):
         return jsonify({'message': 'Missing required fields'}), 400
 
@@ -24,7 +24,7 @@ def register():
     except EmailNotValidError:
         return jsonify({'message': 'Invalid email address'}), 400
     
-    # Check if user already exists
+    # Check user already exists
     if User.query.filter_by(phone=data['phone']).first():
         return jsonify({'message': 'Phone number already exists'}), 400
     

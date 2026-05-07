@@ -10,7 +10,7 @@ MASTER_PHONE = '+9868995742'
 @users_bp.route('/', methods=['GET'])
 @jwt_required()
 def get_users():
-    """Get all managers (excluding users with driver role)"""
+    """Get all users (managers, admins, and drivers)"""
     current_user_phone = get_jwt_identity()
     current_user = User.query.filter_by(phone=current_user_phone).first()
     
@@ -22,8 +22,8 @@ def get_users():
     if current_user.role == 'driver' and current_user.phone != MASTER_PHONE:
         return jsonify({'message': 'Unauthorized'}), 403
     
-    # Get all users except those with role='driver' (drivers are in Driver table)
-    users = User.query.filter(User.role != 'driver').all()
+    # Get all users (managers, admins, users, and drivers)
+    users = User.query.all()
     return jsonify({
         'users': [user.to_dict() for user in users],
         'master_phone': MASTER_PHONE

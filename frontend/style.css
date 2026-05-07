@@ -627,6 +627,16 @@ body {
   color: var(--error);
 }
 
+.badge.trip {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.badge.expense {
+  background: #fff3e0;
+  color: #f57c00;
+}
+
 /* Modal Styles */
 .modal {
   display: none;

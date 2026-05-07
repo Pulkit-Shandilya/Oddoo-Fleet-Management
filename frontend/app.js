@@ -96,6 +96,27 @@ function showDashboard() {
     document.getElementById('profile-avatar').textContent = initials;
     document.getElementById('user-name').textContent = appState.user.username || appState.user.phone || 'User';
     document.getElementById('user-role').textContent = `Role: ${appState.user.role || 'User'}`;
+    
+    // Hide restricted buttons from drivers
+    const restrictedButtons = [
+      'user-management-btn',
+      'trip-dispatcher-btn',
+      'add-vehicle-btn',
+      'create-trip-btn',
+      'add-maintenance-btn',
+      'add-expense-btn'
+    ];
+    
+    restrictedButtons.forEach(btnId => {
+      const btn = document.getElementById(btnId);
+      if (btn) {
+        if (appState.user.role === 'driver') {
+          btn.style.display = 'none';
+        } else {
+          btn.style.display = 'block';
+        }
+      }
+    });
   }
 
   switchTab('Dashboard');
@@ -408,8 +429,8 @@ function renderDriversTable() {
       <td>${driver.license_expiry || '—'}</td>
       <td><span class="badge ${driver.status}">${driver.status}</span></td>
       <td>
-        <button class="action-btn" onclick="editDriver('${driver.phone}')">Edit</button>
-        <button class="action-btn danger" onclick="deleteDriver('${driver.phone}')">Delete</button>
+        ${appState.user.role !== 'driver' ? `<button class="action-btn" onclick="editDriver('${driver.phone}')">Edit</button>` : ''}
+        ${appState.user.role !== 'driver' ? `<button class="action-btn danger" onclick="deleteDriver('${driver.phone}')">Delete</button>` : ''}
       </td>
     </tr>
   `).join('');
@@ -499,10 +520,10 @@ function renderUsersTable() {
       <td>${user.phone}</td>
       <td>${user.username || '—'}</td>
       <td>${user.email || '—'}</td>
-      <td>${user.role}</td>
+      <td><span class="badge ${user.role}">${user.role}</span></td>
       <td>${new Date(user.created_at).toLocaleDateString()}</td>
       <td>
-        <button class="action-btn" onclick="toggleUserRole('${user.phone}', '${user.role}')">Toggle Role</button>
+        ${user.role === 'driver' ? `<button class="action-btn" onclick="toggleUserRole('${user.phone}', '${user.role}')">Promote to Manager</button>` : `<button class="action-btn" onclick="toggleUserRole('${user.phone}', '${user.role}')">Demote to Driver</button>`}
         <button class="action-btn danger" onclick="deleteUser('${user.phone}')">Delete</button>
       </td>
     </tr>
@@ -876,32 +897,66 @@ function renderDashboardActiveTrips() {
   `).join('');
 }
 
-async function renderCompletedTrips() {
+/**
+ * Render combined archival table (trips + expenses)
+ */
+async function renderArchivalTable() {
   try {
     const completedResponse = await tripService.getAll('completed');
     const completedTrips = completedResponse.trips || [];
     
-    const tbody = document.getElementById('completed-trips-tbody');
+    const tbody = document.getElementById('archival-tbody');
     
-    if (completedTrips.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="7" class="empty-row">No completed trips</td></tr>';
+    // Combine trips and expenses
+    const allRecords = [
+      ...completedTrips.map(trip => ({
+        type: 'Trip',
+        vehicle: trip.vehicle_number,
+        details: `${trip.origin} → ${trip.destination} (${trip.distance} km)`,
+        amount: '—',
+        date: trip.completed_at ? new Date(trip.completed_at).toLocaleDateString() : trip.date,
+        id: trip.id,
+        rowType: 'trip'
+      })),
+      ...appState.expenseRecords.map(expense => ({
+        type: 'Expense',
+        vehicle: expense.vehicle_number,
+        details: `${expense.category}${expense.notes ? ' - ' + expense.notes : ''}`,
+        amount: `$${parseFloat(expense.amount || 0).toFixed(2)}`,
+        date: expense.date,
+        id: expense.id,
+        rowType: 'expense'
+      }))
+    ];
+    
+    // Sort by date (newest first)
+    allRecords.sort((a, b) => new Date(b.date) - new Date(a.date));
+    
+    if (allRecords.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" class="empty-row">No records found</td></tr>';
       return;
     }
     
-    tbody.innerHTML = completedTrips.map(trip => `
+    tbody.innerHTML = allRecords.map(record => `
       <tr>
-        <td>${trip.vehicle_number}</td>
-        <td>${trip.driver_phone}</td>
-        <td>${trip.origin}</td>
-        <td>${trip.destination}</td>
-        <td>${trip.date}</td>
-        <td>${trip.distance} km</td>
-        <td>${trip.completed_at ? new Date(trip.completed_at).toLocaleDateString() : '—'}</td>
+        <td><span class="badge ${record.rowType}">${record.type}</span></td>
+        <td>${record.vehicle}</td>
+        <td>${record.details}</td>
+        <td>${record.amount}</td>
+        <td>${record.date}</td>
+        <td>
+          ${record.rowType === 'expense' ? `<button class="action-btn danger" onclick="deleteExpenseRecord(${record.id})">Delete</button>` : ''}
+        </td>
       </tr>
     `).join('');
   } catch (error) {
-    console.error('Failed to load completed trips:', error);
+    console.error('Failed to load archival records:', error);
   }
+}
+
+async function renderCompletedTrips() {
+  // Call the new combined archival table function
+  await renderArchivalTable();
 }
 
 async function completeTrip(tripId) {
@@ -1053,7 +1108,7 @@ async function handleExpenseSubmit(event) {
   localStorage.setItem('expenseRecords', JSON.stringify(appState.expenseRecords));
   
   closeModal('expense-modal');
-  renderExpenseTable();
+  renderArchivalTable();
   showSuccess('Expense created successfully');
 }
 
@@ -1062,7 +1117,7 @@ function deleteExpenseRecord(recordId) {
   
   appState.expenseRecords = appState.expenseRecords.filter(r => r.id !== recordId);
   localStorage.setItem('expenseRecords', JSON.stringify(appState.expenseRecords));
-  renderExpenseTable();
+  renderArchivalTable();
   showSuccess('Expense deleted successfully');
 }
 
@@ -1071,10 +1126,11 @@ function deleteExpenseRecord(recordId) {
  */
 async function toggleUserRole(userPhone, currentRole) {
   try {
-    const newRole = currentRole === 'admin' ? 'user' : 'admin';
+    // If driver, promote to manager; if manager/admin/user, demote to driver
+    const newRole = currentRole === 'driver' ? 'manager' : 'driver';
     await userService.updateRole(userPhone, newRole);
     await loadUserManagementData();
-    showSuccess('User role updated successfully');
+    showSuccess(`User role updated to ${newRole}`);
   } catch (error) {
     showError(error.message);
   }

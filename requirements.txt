@@ -17,3 +17,4 @@ psycopg2-binary==2.9.9  # For PostgreSQL (recommended for Heroku)
 # Or use SQLite (included in Python)
 
 gunicorn==21.2.0  # Production WSGI server for Heroku
+

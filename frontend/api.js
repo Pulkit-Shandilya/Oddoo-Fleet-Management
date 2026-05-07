@@ -3,8 +3,10 @@
  * Handles all HTTP communication with the backend
  */
 
-const API_URL = 'http://localhost:5000/api';
-
+// const API_URL = 'http://localhost:5000/api';
+const API_URL = window.location.hostname === 'localhost' 
+  ? 'http://localhost:5000/api' 
+  : '/api';
 /**
  * Make an authenticated API request
  */

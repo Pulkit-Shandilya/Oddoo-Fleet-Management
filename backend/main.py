@@ -1,6 +1,6 @@
 import os
-from app import create_app, db
-from app.models import User, Vehicle, Driver
+from backend.app import create_app, db
+from backend.app.models import User, Vehicle, Driver
 
 app = create_app()
 

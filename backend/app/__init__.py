@@ -1,4 +1,5 @@
-from flask import Flask
+import os
+from flask import Flask, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
@@ -12,7 +13,10 @@ jwt = JWTManager()
 migrate = Migrate()
 
 def create_app(config_class=Config):
-    app = Flask(__name__)
+    # Point the static folder to the frontend directory
+    frontend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'frontend'))
+    app = Flask(__name__, static_folder=frontend_dir, static_url_path='/')
+    
     app.config.from_object(config_class)
     
     # Initialize extensions
@@ -36,5 +40,18 @@ def create_app(config_class=Config):
     app.register_blueprint(users_bp, url_prefix='/api/users')
     app.register_blueprint(trips_bp, url_prefix='/api/trips')
     app.register_blueprint(maintenance_bp, url_prefix='/api/maintenance')
+    
+    # Serve frontend static files
+    @app.route('/')
+    def serve_index():
+        return send_from_directory(app.static_folder, 'index.html')
+
+    @app.route('/<path:path>')
+    def serve_static_files(path):
+        # If the file exists (like style.css or app.js), serve it
+        if os.path.exists(os.path.join(app.static_folder, path)):
+            return send_from_directory(app.static_folder, path)
+        # Otherwise fallback to index.html (useful for Single Page App routing)
+        return send_from_directory(app.static_folder, 'index.html')
     
     return app
